@@ -54,6 +54,30 @@
             </svg>
           </button>
         </div>
+        
+        <!-- Download button -->
+        <div class="download-control">
+          <button id="downloadBtn" class="icon-btn" title="Download as HTML">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          <button id="downloadEpubBtn" class="icon-btn" title="Download as EPUB">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              <path d="M12 6v6M9 9h6"/>
+            </svg>
+          </button>
+          <button id="emailEpubBtn" class="icon-btn" title="Email EPUB">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -78,6 +102,45 @@
   <!-- Reading progress indicator -->
   <div id="progressBar" class="progress-bar"></div>
 
+  <!-- Download Modal -->
+  <div id="downloadModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Download Article</h2>
+        <button id="closeModal" class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Save this article as an HTML file:</p>
+        <input type="text" id="filenameInput" placeholder="Enter filename (without extension)" class="filename-input" />
+        <p class="modal-note">The article will be saved as a self-contained HTML file that you can open in any browser or email as an attachment.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelDownload" class="btn btn-secondary">Cancel</button>
+        <button id="confirmDownload" class="btn btn-primary">Download</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Email EPUB Modal -->
+  <div id="emailEpubModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Email EPUB File</h2>
+        <button id="closeEmailEpubModal" class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Enter the recipient's email address:</p>
+        <input type="email" id="recipientEmailInput" placeholder="recipient@example.com" class="email-input" />
+        <p class="modal-note">The EPUB file will be downloaded, and your email client will open with the recipient filled in. You'll need to manually attach the downloaded EPUB file before sending.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelEmailEpub" class="btn btn-secondary">Cancel</button>
+        <button id="confirmEmailEpub" class="btn btn-primary">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="libs/jszip.min.js"></script>
   <script src="reader.js"></script>
 </body>
 </html>
