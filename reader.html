@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chrome Reader</title>
+  <link rel="stylesheet" href="reader.css">
+</head>
+<body class="light-theme">
+  <!-- Header with controls -->
+  <header class="reader-header">
+    <div class="header-content">
+      <div class="header-left">
+        <button id="closeBtn" class="icon-btn" title="Close Chrome Reader">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+        <a id="sourceLink" href="#" target="_blank" class="source-link" title="View original">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
+          </svg>
+          Original
+        </a>
+      </div>
+      
+      <div class="header-right">
+        <!-- Theme switcher -->
+        <div class="theme-switcher">
+          <button class="theme-btn" data-theme="light" title="Light theme">A</button>
+          <button class="theme-btn" data-theme="sepia" title="Sepia theme">A</button>
+          <button class="theme-btn" data-theme="dark" title="Dark theme">A</button>
+        </div>
+        
+        <!-- Font size controls -->
+        <div class="font-controls">
+          <button id="decreaseFont" class="icon-btn" title="Decrease font size">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <text x="50%" y="50%" font-size="16" text-anchor="middle" dominant-baseline="middle" fill="currentColor">A</text>
+            </svg>
+          </button>
+          <button id="increaseFont" class="icon-btn" title="Increase font size">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <text x="50%" y="50%" font-size="20" text-anchor="middle" dominant-baseline="middle" fill="currentColor">A</text>
+            </svg>
+          </button>
+        </div>
+        
+        <!-- Width control -->
+        <div class="width-control">
+          <button id="toggleWidth" class="icon-btn" title="Toggle width">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main article content -->
+  <main class="reader-main">
+    <article id="articleContent" class="article-content">
+      <!-- Metadata -->
+      <div class="article-meta">
+        <h1 id="articleTitle" class="article-title">Loading...</h1>
+        <div id="articleByline" class="article-byline"></div>
+        <div id="articleSite" class="article-site"></div>
+      </div>
+      
+      <!-- Article body -->
+      <div id="articleBody" class="article-body">
+        <p>Loading article content...</p>
+      </div>
+    </article>
+  </main>
+
+  <!-- Reading progress indicator -->
+  <div id="progressBar" class="progress-bar"></div>
+
+  <script src="reader.js"></script>
+</body>
+</html>

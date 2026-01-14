@@ -1,0 +1,45 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Thumbnails
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# Chrome extension development
+*.pem
+*.crx
+*.zip
+
+# Keep these files
+!icons/*.png
+!libs/*.js
