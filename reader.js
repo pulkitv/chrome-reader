@@ -675,13 +675,53 @@ function htmlToXHTML(html) {
 /**
  * Download article as EPUB file
  */
-function downloadArticleEPUB() {
+async function downloadArticleEPUB() {
   // Get article data
   const title = document.getElementById('articleTitle').textContent;
   const byline = document.getElementById('articleByline').textContent || 'Unknown Author';
   const siteName = document.getElementById('articleSite').textContent || 'Unknown Source';
-  const bodyHtml = document.getElementById('articleBody').innerHTML;
+  let bodyHtml = document.getElementById('articleBody').innerHTML;
   const sourceLink = document.getElementById('sourceLink').href;
+  
+  // Extract and convert images to base64
+  const images = document.getElementById('articleBody').querySelectorAll('img');
+  const imageMap = new Map();
+  let imageIndex = 0;
+  
+  for (const img of images) {
+    const src = img.src;
+    if (!src || src.startsWith('data:')) continue;
+    
+    try {
+      // Fetch the image
+      const response = await fetch(src);
+      const blob = await response.blob();
+      
+      // Get file extension from blob type
+      const mimeType = blob.type || 'image/png';
+      const ext = mimeType.split('/')[1] || 'png';
+      const imageName = `image_${imageIndex}.${ext}`;
+      
+      // Convert to base64
+      const base64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(blob);
+      });
+      
+      imageMap.set(src, { name: imageName, base64, mimeType });
+      imageIndex++;
+      console.log(`Embedded image: ${imageName}`);
+    } catch (error) {
+      console.warn('Failed to embed image:', src, error);
+    }
+  }
+  
+  // Replace image URLs in HTML with embedded paths
+  imageMap.forEach((imageData, originalSrc) => {
+    const regex = new RegExp(originalSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    bodyHtml = bodyHtml.replace(regex, `images/${imageData.name}`);
+  });
   
   // Convert HTML to XHTML for EPUB compatibility
   const bodyXHTML = htmlToXHTML(bodyHtml);
@@ -723,6 +763,9 @@ function downloadArticleEPUB() {
     <item id="content" href="content.html" media-type="application/xhtml+xml"/>
     <item id="style" href="style.css" media-type="text/css"/>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    ${Array.from(imageMap.values()).map((img, idx) => 
+      `<item id="img${idx}" href="images/${img.name}" media-type="${img.mimeType}"/>`
+    ).join('\n    ')}
   </manifest>
   <spine>
     <itemref idref="content"/>
@@ -843,7 +886,7 @@ th {
 </body>
 </html>`;
   
-  // Create ZIP file manually (basic implementation)
+  // Create ZIP file with embedded images
   createEPUBZip({
     'mimetype': mimetype,
     'META-INF/container.xml': containerXML,
@@ -851,7 +894,7 @@ th {
     'OEBPS/nav.xhtml': navXHTML,
     'OEBPS/style.css': styleCSS,
     'OEBPS/content.html': contentHTML
-  }, filename);
+  }, filename, imageMap);
 }
 
 /**
@@ -880,7 +923,7 @@ function escapeXML(str) {
 /**
  * Create EPUB ZIP file using basic ZIP implementation
  */
-function createEPUBZip(files, filename) {
+function createEPUBZip(files, filename, imageMap = new Map()) {
   // Check if JSZip is available
   if (typeof JSZip === 'undefined') {
     alert('EPUB generation requires JSZip library. Downloading as HTML instead.');
@@ -901,6 +944,13 @@ function createEPUBZip(files, filename) {
   zip.file('OEBPS/nav.xhtml', files['OEBPS/nav.xhtml']);
   zip.file('OEBPS/style.css', files['OEBPS/style.css']);
   zip.file('OEBPS/content.html', files['OEBPS/content.html']);
+  
+  // Add images to EPUB
+  imageMap.forEach((imageData) => {
+    zip.file(`OEBPS/images/${imageData.name}`, imageData.base64, { base64: true });
+  });
+  
+  console.log(`Added ${imageMap.size} images to EPUB`);
   
   // Generate the EPUB file
   zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' })
