@@ -8,6 +8,15 @@ let isWideWidth = false;
 
 // Initialize reader on page load
 document.addEventListener('DOMContentLoaded', async () => {
+  // Set base URL from query parameter to help with image loading
+  const urlParams = new URLSearchParams(window.location.search);
+  const sourceUrl = urlParams.get('url');
+  if (sourceUrl) {
+    const base = document.createElement('base');
+    base.href = sourceUrl;
+    document.head.insertBefore(base, document.head.firstChild);
+  }
+  
   await loadArticle();
   setupEventListeners();
   loadPreferences();
@@ -59,6 +68,18 @@ async function loadArticle() {
 
     // Sanitize and display article content
     bodyEl.innerHTML = sanitizeHtml(currentArticle.content);
+
+    // Debug: Check images in content
+    const images = bodyEl.querySelectorAll('img');
+    console.log(`Article has ${images.length} images`);
+    images.forEach((img, i) => {
+      console.log(`Image ${i}:`, {
+        src: img.src,
+        complete: img.complete,
+        naturalWidth: img.naturalWidth,
+        naturalHeight: img.naturalHeight
+      });
+    });
 
     // Lazy load images for better performance
     setupLazyLoading();

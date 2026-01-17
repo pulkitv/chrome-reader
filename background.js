@@ -32,9 +32,13 @@ chrome.action.onClicked.addListener(async (tab) => {
       }
     });
 
-    // Open the reader view in a new tab
+    // Open the reader view in a new tab with the original URL as query parameter
+    // This helps with referrer policies for loading external images
+    const readerUrl = new URL(chrome.runtime.getURL('reader.html'));
+    readerUrl.searchParams.set('url', tab.url);
+    
     chrome.tabs.create({
-      url: chrome.runtime.getURL('reader.html')
+      url: readerUrl.toString()
     });
 
   } catch (error) {

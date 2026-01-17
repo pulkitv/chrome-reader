@@ -10,7 +10,12 @@
     const elementsWithSrc = documentClone.querySelectorAll('[src]');
     elementsWithSrc.forEach(el => {
       try {
-        const absoluteUrl = new URL(el.getAttribute('src'), baseUrl).href;
+        let src = el.getAttribute('src');
+        // Fix Substack CDN URLs - remove w_XXXX,c_limit parameters
+        if (src && src.includes('substackcdn.com')) {
+          src = src.replace(/,w_\d+,c_limit,/, ',');
+        }
+        const absoluteUrl = new URL(src, baseUrl).href;
         el.setAttribute('src', absoluteUrl);
       } catch (e) {
         // Invalid URL, skip
@@ -27,20 +32,11 @@
       }
     });
 
-    // Handle srcset attributes for responsive images
+    // Handle srcset attributes for responsive images - REMOVE THEM to avoid broken URLs
     const elementsWithSrcset = documentClone.querySelectorAll('[srcset]');
     elementsWithSrcset.forEach(el => {
-      const srcset = el.getAttribute('srcset');
-      const absoluteSrcset = srcset.split(',').map(src => {
-        const parts = src.trim().split(/\s+/);
-        try {
-          parts[0] = new URL(parts[0], baseUrl).href;
-        } catch (e) {
-          // Invalid URL, skip
-        }
-        return parts.join(' ');
-      }).join(', ');
-      el.setAttribute('srcset', absoluteSrcset);
+      // Remove srcset entirely as it causes issues with Substack URLs
+      el.removeAttribute('srcset');
     });
 
     // Handle lazy-loaded images (common data-src pattern)
