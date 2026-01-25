@@ -200,6 +200,7 @@ body {
 .speed-select:focus {
   outline: none;
   border-color: var(--link-color);
+}
 
 .mode-select {
   background: none;
@@ -220,7 +221,6 @@ body {
   outline: none;
   border-color: var(--link-color);
 }
-}
 
 .flash-control-btn {
   display: none;
@@ -229,14 +229,6 @@ body {
 #flashBtn.active {
   background-color: var(--link-color);
   color: white;
-}
-
-#flashModeToggle.active {
-  background-color: var(--border-color);
-}
-
-#flashGranularityToggle.active {
-  background-color: var(--border-color);
 }
 
 /* Flash It Word Highlighting */
