@@ -215,6 +215,10 @@ body {
   background-color: var(--border-color);
 }
 
+#flashGranularityToggle.active {
+  background-color: var(--border-color);
+}
+
 /* Flash It Word Highlighting */
 .flash-word {
   transition: background-color 0.15s ease;

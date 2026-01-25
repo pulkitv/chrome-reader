@@ -10,6 +10,7 @@ let isWideWidth = false;
 let isFlashing = false;
 let flashMode = 'overlay'; // 'overlay' or 'inline'
 let flashSpeed = 250; // Words per minute (default)
+let highlightGranularity = 'word'; // 'word' or 'line'
 let currentWordIndex = 0;
 let wordArray = []; // Array of word objects {text, element, length}
 let flashTimeout = null;
@@ -251,6 +252,20 @@ function setupEventListeners() {
   
   document.getElementById('flashModeToggle').addEventListener('click', () => {
     toggleFlashMode();
+  });
+  
+  document.getElementById('flashGranularityToggle').addEventListener('click', () => {
+    highlightGranularity = highlightGranularity === 'word' ? 'line' : 'word';
+    updateGranularityButton();
+    
+    // Re-highlight current word with new granularity
+    if (isFlashing && flashMode === 'inline') {
+      if (currentWordIndex > 0) {
+        highlightInline(currentWordIndex - 1);
+      }
+    }
+    
+    saveFlashState();
   });
   
   document.getElementById('flashPause').addEventListener('click', () => {
@@ -563,22 +578,73 @@ function getPunctuationPause(word) {
 }
 
 /**
+ * Get all words on the same line as the given word
+ */
+function getWordsOnLine(wordIndex) {
+  if (wordIndex < 0 || wordIndex >= wordArray.length) return [];
+  
+  const targetWord = wordArray[wordIndex];
+  const targetRect = targetWord.element.getBoundingClientRect();
+  const targetTop = targetRect.top;
+  const tolerance = 5; // pixels, for matching line heights
+  
+  const wordsOnLine = [];
+  for (let i = 0; i < wordArray.length; i++) {
+    const wordRect = wordArray[i].element.getBoundingClientRect();
+    // Check if word is approximately on the same vertical line
+    if (Math.abs(wordRect.top - targetTop) < tolerance) {
+      wordsOnLine.push(i);
+    }
+  }
+  
+  return wordsOnLine;
+}
+
+/**
+ * Highlight all words on a line
+ */
+function highlightLine(wordIndex) {
+  // Remove previous highlights
+  const prevHighlighted = document.querySelectorAll('.flash-word.flash-highlight');
+  prevHighlighted.forEach(el => el.classList.remove('flash-highlight'));
+  
+  // Get all words on this line
+  const wordsOnLine = getWordsOnLine(wordIndex);
+  
+  // Highlight all words on the line
+  wordsOnLine.forEach(idx => {
+    if (idx >= 0 && idx < wordArray.length) {
+      wordArray[idx].element.classList.add('flash-highlight');
+    }
+  });
+  
+  // Auto-scroll if needed
+  if (wordIndex >= 0 && wordIndex < wordArray.length) {
+    scrollToWordIfNeeded(wordArray[wordIndex].element);
+  }
+}
+
+/**
  * Highlight word inline (in article body)
  */
 function highlightInline(wordIndex) {
-  // Remove previous highlight
-  const prevHighlighted = document.querySelector('.flash-word.flash-highlight');
-  if (prevHighlighted) {
-    prevHighlighted.classList.remove('flash-highlight');
-  }
-  
-  // Highlight current word
-  if (wordIndex >= 0 && wordIndex < wordArray.length) {
-    const wordObj = wordArray[wordIndex];
-    wordObj.element.classList.add('flash-highlight');
+  if (highlightGranularity === 'line') {
+    highlightLine(wordIndex);
+  } else {
+    // Remove previous highlight
+    const prevHighlighted = document.querySelector('.flash-word.flash-highlight');
+    if (prevHighlighted) {
+      prevHighlighted.classList.remove('flash-highlight');
+    }
     
-    // Auto-scroll if word is off-screen
-    scrollToWordIfNeeded(wordObj.element);
+    // Highlight current word
+    if (wordIndex >= 0 && wordIndex < wordArray.length) {
+      const wordObj = wordArray[wordIndex];
+      wordObj.element.classList.add('flash-highlight');
+      
+      // Auto-scroll if word is off-screen
+      scrollToWordIfNeeded(wordObj.element);
+    }
   }
 }
 
@@ -678,6 +744,7 @@ async function saveFlashState() {
         wordIndex: currentWordIndex,
         speed: flashSpeed,
         mode: flashMode,
+        granularity: highlightGranularity,
         isPaused: isPaused
       }
     });
@@ -696,11 +763,13 @@ async function loadFlashState() {
       currentWordIndex = flashItState.wordIndex || 0;
       flashSpeed = flashItState.speed || 250;
       flashMode = flashItState.mode || 'overlay';
+      highlightGranularity = flashItState.granularity || 'word';
       isPaused = flashItState.isPaused || false;
       
       // Update UI
       document.getElementById('flashSpeed').value = flashSpeed;
       updateFlashModeButton();
+      updateGranularityButton();
       
       return true;
     }
@@ -917,6 +986,7 @@ function updateFlashButtons(state) {
   const restartBtn = document.getElementById('flashRestart');
   const overlayPauseBtn = document.getElementById('flashOverlayPause');
   const overlayPlayBtn = document.getElementById('flashOverlayPlay');
+  const granularityBtn = document.getElementById('flashGranularityToggle');
   
   if (state === 'playing') {
     flashBtn.classList.add('active');
@@ -940,6 +1010,13 @@ function updateFlashButtons(state) {
     overlayPauseBtn.style.display = 'flex';
     overlayPlayBtn.style.display = 'none';
   }
+  
+  // Show granularity toggle only in inline mode
+  if (flashMode === 'inline' && state !== 'stopped') {
+    granularityBtn.style.display = 'flex';
+  } else {
+    granularityBtn.style.display = 'none';
+  }
 }
 
 /**
@@ -950,6 +1027,17 @@ function updateFlashModeButton() {
   modeBtn.title = flashMode === 'overlay' ? 'Switch to inline mode' : 'Switch to overlay mode';
   modeBtn.classList.toggle('active', flashMode === 'inline');
 }
+/**
+ * Update granularity toggle button
+ */
+function updateGranularityButton() {
+  const btn = document.getElementById('flashGranularityToggle');
+  btn.title = highlightGranularity === 'line' 
+    ? 'Switch to word highlighting' 
+    : 'Switch to line highlighting';
+  btn.classList.toggle('active', highlightGranularity === 'line');
+}
+
 
 /**
  * Open download modal
