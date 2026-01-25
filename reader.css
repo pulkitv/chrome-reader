@@ -200,6 +200,26 @@ body {
 .speed-select:focus {
   outline: none;
   border-color: var(--link-color);
+
+.mode-select {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.mode-select:hover {
+  background-color: var(--border-color);
+}
+
+.mode-select:focus {
+  outline: none;
+  border-color: var(--link-color);
+}
 }
 
 .flash-control-btn {
@@ -227,6 +247,19 @@ body {
 .flash-word.flash-highlight {
   background-color: var(--flash-highlight-bg);
   transition: background-color 0.1s ease;
+}
+
+/* Flash It Line Highlighting - uses overlay element for continuous highlight */
+.flash-line-highlight-overlay {
+  background-color: var(--flash-highlight-bg);
+  z-index: 0;
+  opacity: 1;
+  transition: opacity 0.1s ease;
+}
+
+.article-body {
+  position: relative;
+  z-index: 1;
 }
 
 /* Flash It RSVP Overlay */

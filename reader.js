@@ -8,9 +8,8 @@ let isWideWidth = false;
 
 // Flash It speed reading state
 let isFlashing = false;
-let flashMode = 'overlay'; // 'overlay' or 'inline'
+let flashMode = 'overlay'; // 'overlay', 'inline-word', or 'inline-line'
 let flashSpeed = 250; // Words per minute (default)
-let highlightGranularity = 'word'; // 'word' or 'line'
 let currentWordIndex = 0;
 let wordArray = []; // Array of word objects {text, element, length}
 let flashTimeout = null;
@@ -250,22 +249,8 @@ function setupEventListeners() {
     updateFlashSpeed(e.target.value);
   });
   
-  document.getElementById('flashModeToggle').addEventListener('click', () => {
-    toggleFlashMode();
-  });
-  
-  document.getElementById('flashGranularityToggle').addEventListener('click', () => {
-    highlightGranularity = highlightGranularity === 'word' ? 'line' : 'word';
-    updateGranularityButton();
-    
-    // Re-highlight current word with new granularity
-    if (isFlashing && flashMode === 'inline') {
-      if (currentWordIndex > 0) {
-        highlightInline(currentWordIndex - 1);
-      }
-    }
-    
-    saveFlashState();
+  document.getElementById('flashModeSelect').addEventListener('change', (e) => {
+    changeFlashMode(e.target.value);
   });
   
   document.getElementById('flashPause').addEventListener('click', () => {
@@ -604,31 +589,55 @@ function getWordsOnLine(wordIndex) {
  * Highlight all words on a line
  */
 function highlightLine(wordIndex) {
-  // Remove previous highlights
-  const prevHighlighted = document.querySelectorAll('.flash-word.flash-highlight');
-  prevHighlighted.forEach(el => el.classList.remove('flash-highlight'));
+  // Remove previous highlight overlay
+  const prevOverlay = document.querySelector('.flash-line-highlight-overlay');
+  if (prevOverlay) {
+    prevOverlay.remove();
+  }
+  
+  if (wordIndex < 0 || wordIndex >= wordArray.length) return;
   
   // Get all words on this line
   const wordsOnLine = getWordsOnLine(wordIndex);
+  if (wordsOnLine.length === 0) return;
   
-  // Highlight all words on the line
-  wordsOnLine.forEach(idx => {
-    if (idx >= 0 && idx < wordArray.length) {
-      wordArray[idx].element.classList.add('flash-highlight');
-    }
-  });
+  // Get the parent element of the first word to calculate relative position
+  const firstWord = wordArray[wordsOnLine[0]].element;
+  const lastWord = wordArray[wordsOnLine[wordsOnLine.length - 1]].element;
+  const articleBody = document.getElementById('articleBody');
+  
+  // Get positions relative to articleBody
+  const articleRect = articleBody.getBoundingClientRect();
+  const firstRect = firstWord.getBoundingClientRect();
+  const lastRect = lastWord.getBoundingClientRect();
+  
+  // Calculate position relative to article body
+  const left = firstRect.left - articleRect.left;
+  const top = firstRect.top - articleRect.top + articleBody.scrollTop;
+  
+  // Create highlight overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'flash-line-highlight-overlay';
+  overlay.style.position = 'absolute';
+  overlay.style.left = `${left}px`;
+  overlay.style.top = `${top}px`;
+  overlay.style.width = `${lastRect.right - firstRect.left}px`;
+  overlay.style.height = `${firstRect.height}px`;
+  overlay.style.pointerEvents = 'none';
+  
+  // Append to article body
+  articleBody.style.position = 'relative';
+  articleBody.appendChild(overlay);
   
   // Auto-scroll if needed
-  if (wordIndex >= 0 && wordIndex < wordArray.length) {
-    scrollToWordIfNeeded(wordArray[wordIndex].element);
-  }
+  scrollToWordIfNeeded(wordArray[wordIndex].element);
 }
 
 /**
  * Highlight word inline (in article body)
  */
 function highlightInline(wordIndex) {
-  if (highlightGranularity === 'line') {
+  if (flashMode === 'inline-line') {
     highlightLine(wordIndex);
   } else {
     // Remove previous highlight
@@ -744,7 +753,6 @@ async function saveFlashState() {
         wordIndex: currentWordIndex,
         speed: flashSpeed,
         mode: flashMode,
-        granularity: highlightGranularity,
         isPaused: isPaused
       }
     });
@@ -763,13 +771,11 @@ async function loadFlashState() {
       currentWordIndex = flashItState.wordIndex || 0;
       flashSpeed = flashItState.speed || 250;
       flashMode = flashItState.mode || 'overlay';
-      highlightGranularity = flashItState.granularity || 'word';
       isPaused = flashItState.isPaused || false;
       
       // Update UI
       document.getElementById('flashSpeed').value = flashSpeed;
-      updateFlashModeButton();
-      updateGranularityButton();
+      document.getElementById('flashModeSelect').value = flashMode;
       
       return true;
     }
@@ -912,9 +918,9 @@ function stopFlashIt() {
 }
 
 /**
- * Toggle between overlay and inline display modes
+ * Change Flash It display mode
  */
-function toggleFlashMode() {
+function changeFlashMode(newMode) {
   const wasFlashing = isFlashing && !isPaused;
   const wasPaused = isPaused;
   
@@ -923,11 +929,8 @@ function toggleFlashMode() {
     pauseFlashIt();
   }
   
-  // Toggle mode
-  flashMode = flashMode === 'overlay' ? 'inline' : 'overlay';
-  
-  // Update button
-  updateFlashModeButton();
+  // Change mode
+  flashMode = newMode;
   
   // Handle overlay visibility
   const overlay = document.getElementById('flashOverlay');
@@ -986,7 +989,6 @@ function updateFlashButtons(state) {
   const restartBtn = document.getElementById('flashRestart');
   const overlayPauseBtn = document.getElementById('flashOverlayPause');
   const overlayPlayBtn = document.getElementById('flashOverlayPlay');
-  const granularityBtn = document.getElementById('flashGranularityToggle');
   
   if (state === 'playing') {
     flashBtn.classList.add('active');
@@ -1010,34 +1012,7 @@ function updateFlashButtons(state) {
     overlayPauseBtn.style.display = 'flex';
     overlayPlayBtn.style.display = 'none';
   }
-  
-  // Show granularity toggle only in inline mode
-  if (flashMode === 'inline' && state !== 'stopped') {
-    granularityBtn.style.display = 'flex';
-  } else {
-    granularityBtn.style.display = 'none';
-  }
 }
-
-/**
- * Update Flash mode toggle button
- */
-function updateFlashModeButton() {
-  const modeBtn = document.getElementById('flashModeToggle');
-  modeBtn.title = flashMode === 'overlay' ? 'Switch to inline mode' : 'Switch to overlay mode';
-  modeBtn.classList.toggle('active', flashMode === 'inline');
-}
-/**
- * Update granularity toggle button
- */
-function updateGranularityButton() {
-  const btn = document.getElementById('flashGranularityToggle');
-  btn.title = highlightGranularity === 'line' 
-    ? 'Switch to word highlighting' 
-    : 'Switch to line highlighting';
-  btn.classList.toggle('active', highlightGranularity === 'line');
-}
-
 
 /**
  * Open download modal
