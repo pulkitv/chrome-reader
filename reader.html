@@ -56,6 +56,57 @@
           </button>
         </div>
         
+        <!-- Flash It speed reading control -->
+        <div class="flash-control">
+          <button id="flashBtn" class="icon-btn" title="Flash It - Speed reading mode">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/>
+            </svg>
+          </button>
+          <select id="flashSpeed" class="speed-select" title="Reading speed">
+            <option value="50">50 WPM</option>
+            <option value="100">100 WPM</option>
+            <option value="150">150 WPM</option>
+            <option value="200">200 WPM</option>
+            <option value="250" selected>250 WPM</option>
+            <option value="300">300 WPM</option>
+            <option value="350">350 WPM</option>
+            <option value="400">400 WPM</option>
+            <option value="450">450 WPM</option>
+            <option value="500">500 WPM</option>
+            <option value="600">600 WPM</option>
+            <option value="700">700 WPM</option>
+            <option value="800">800 WPM</option>
+            <option value="900">900 WPM</option>
+            <option value="1000">1000 WPM</option>
+          </select>
+          <button id="flashModeToggle" class="icon-btn" title="Toggle display mode">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </button>
+          <button id="flashPause" class="icon-btn flash-control-btn" title="Pause" style="display: none;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="6" y="4" width="4" height="16"/>
+              <rect x="14" y="4" width="4" height="16"/>
+            </svg>
+          </button>
+          <button id="flashPlay" class="icon-btn flash-control-btn" title="Play" style="display: none;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+          </button>
+          <button id="flashRestart" class="icon-btn flash-control-btn" title="Restart" style="display: none;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+          </button>
+        </div>
+        
         <!-- Download button -->
         <div class="download-control">
           <button id="downloadBtn" class="icon-btn" title="Download as HTML">
@@ -137,6 +188,40 @@
       <div class="modal-footer">
         <button id="cancelEmailEpub" class="btn btn-secondary">Cancel</button>
         <button id="confirmEmailEpub" class="btn btn-primary">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flash It RSVP Overlay -->
+  <div id="flashOverlay" class="flash-overlay">
+    <div class="flash-overlay-content">
+      <div class="flash-overlay-header">
+        <div class="flash-progress">Word <span id="flashCurrentWord">0</span> of <span id="flashTotalWords">0</span></div>
+        <button id="closeFlashOverlay" class="close-flash">&times;</button>
+      </div>
+      <div class="flash-word-container">
+        <div class="flash-context-prev" id="flashPrevWord"></div>
+        <div class="flash-current-word" id="flashCurrentWordDisplay"></div>
+        <div class="flash-context-next" id="flashNextWord"></div>
+      </div>
+      <div class="flash-overlay-footer">
+        <button id="flashOverlayPause" class="flash-overlay-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="6" y="4" width="4" height="16"/>
+            <rect x="14" y="4" width="4" height="16"/>
+          </svg>
+        </button>
+        <button id="flashOverlayPlay" class="flash-overlay-btn" style="display: none;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+        </button>
+        <button id="flashOverlayRestart" class="flash-overlay-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+        </button>
       </div>
     </div>
   </div>

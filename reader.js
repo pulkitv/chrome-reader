@@ -6,6 +6,15 @@ const THEMES = ['light-theme', 'sepia-theme', 'dark-theme'];
 let currentFontSizeIndex = 1; // Start with font-normal
 let isWideWidth = false;
 
+// Flash It speed reading state
+let isFlashing = false;
+let flashMode = 'overlay'; // 'overlay' or 'inline'
+let flashSpeed = 250; // Words per minute (default)
+let currentWordIndex = 0;
+let wordArray = []; // Array of word objects {text, element, length}
+let flashTimeout = null;
+let isPaused = false;
+
 // Initialize reader on page load
 document.addEventListener('DOMContentLoaded', async () => {
   // Set base URL from query parameter to help with image loading
@@ -227,6 +236,59 @@ function setupEventListeners() {
     }
   });
 
+  // Flash It controls
+  document.getElementById('flashBtn').addEventListener('click', () => {
+    if (!isFlashing) {
+      startFlashIt();
+    } else {
+      stopFlashIt();
+    }
+  });
+  
+  document.getElementById('flashSpeed').addEventListener('change', (e) => {
+    updateFlashSpeed(e.target.value);
+  });
+  
+  document.getElementById('flashModeToggle').addEventListener('click', () => {
+    toggleFlashMode();
+  });
+  
+  document.getElementById('flashPause').addEventListener('click', () => {
+    pauseFlashIt();
+  });
+  
+  document.getElementById('flashPlay').addEventListener('click', () => {
+    resumeFlashIt();
+  });
+  
+  document.getElementById('flashRestart').addEventListener('click', () => {
+    restartFlashIt();
+  });
+  
+  // Flash overlay controls
+  document.getElementById('closeFlashOverlay').addEventListener('click', () => {
+    stopFlashIt();
+  });
+  
+  document.getElementById('flashOverlayPause').addEventListener('click', () => {
+    pauseFlashIt();
+  });
+  
+  document.getElementById('flashOverlayPlay').addEventListener('click', () => {
+    resumeFlashIt();
+  });
+  
+  document.getElementById('flashOverlayRestart').addEventListener('click', () => {
+    restartFlashIt();
+  });
+  
+  // Close flash overlay on outside click
+  document.getElementById('flashOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'flashOverlay') {
+      stopFlashIt();
+    }
+  });
+
   // Modal close buttons
   document.getElementById('closeModal').addEventListener('click', closeDownloadModal);
   document.getElementById('cancelDownload').addEventListener('click', closeDownloadModal);
@@ -253,17 +315,53 @@ function setupEventListeners() {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    // Escape to close
+    // Don't trigger shortcuts if typing in input fields
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+      return;
+    }
+    
+    // Escape to close (or exit Flash It mode)
     if (e.key === 'Escape') {
-      window.close();
+      if (isFlashing) {
+        stopFlashIt();
+      } else {
+        window.close();
+      }
     }
     // + to increase font size
     if (e.key === '+' || e.key === '=') {
-      document.getElementById('increaseFont').click();
+      if (!isFlashing) {
+        document.getElementById('increaseFont').click();
+      }
     }
     // - to decrease font size
     if (e.key === '-') {
-      document.getElementById('decreaseFont').click();
+      if (!isFlashing) {
+        document.getElementById('decreaseFont').click();
+      }
+    }
+    // F to toggle Flash It mode
+    if (e.key === 'f' || e.key === 'F') {
+      e.preventDefault();
+      if (!isFlashing) {
+        startFlashIt();
+      } else {
+        stopFlashIt();
+      }
+    }
+    // Space to pause/resume Flash It
+    if (e.key === ' ' && isFlashing) {
+      e.preventDefault();
+      if (isPaused) {
+        resumeFlashIt();
+      } else {
+        pauseFlashIt();
+      }
+    }
+    // R to restart Flash It
+    if ((e.key === 'r' || e.key === 'R') && isFlashing) {
+      e.preventDefault();
+      restartFlashIt();
     }
   });
 }
@@ -367,9 +465,495 @@ function displayError(message) {
   `;
 }
 
+// ===== Flash It Speed Reading Functions =====
+
+/**
+ * Extract all words from article body and wrap them in spans
+ */
+function extractWordsFromArticle() {
+  const articleBody = document.getElementById('articleBody');
+  if (!articleBody) return [];
+  
+  const words = [];
+  let wordIndex = 0;
+  
+  // Recursive function to traverse text nodes
+  function traverseNodes(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent;
+      if (text.trim().length === 0) return;
+      
+      // Split into words while preserving whitespace
+      const parts = text.split(/(\s+)/);
+      const fragment = document.createDocumentFragment();
+      
+      parts.forEach(part => {
+        if (part.trim().length > 0) {
+          // Create span for word
+          const span = document.createElement('span');
+          span.className = 'flash-word';
+          span.setAttribute('data-word-index', wordIndex);
+          span.textContent = part;
+          fragment.appendChild(span);
+          
+          // Store word info
+          words.push({
+            text: part,
+            element: span,
+            length: part.length,
+            index: wordIndex
+          });
+          
+          wordIndex++;
+        } else if (part.length > 0) {
+          // Preserve whitespace
+          fragment.appendChild(document.createTextNode(part));
+        }
+      });
+      
+      // Replace text node with wrapped words
+      if (node.parentNode) {
+        node.parentNode.replaceChild(fragment, node);
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      // Skip script, style, and SVG elements
+      const tagName = node.tagName.toLowerCase();
+      if (tagName === 'script' || tagName === 'style' || tagName === 'svg') {
+        return;
+      }
+      
+      // Traverse child nodes
+      const children = Array.from(node.childNodes);
+      children.forEach(child => traverseNodes(child));
+    }
+  }
+  
+  traverseNodes(articleBody);
+  return words;
+}
+
+/**
+ * Calculate adaptive delay based on word length and base speed
+ */
+function calculateWordDelay(word, baseSpeed) {
+  // Convert WPM to milliseconds per word
+  const baseDelay = (60 / baseSpeed) * 1000;
+  
+  const wordLength = word.length;
+  
+  // Adaptive multipliers based on word length
+  if (wordLength <= 3) return Math.round(baseDelay * 0.8);
+  if (wordLength <= 8) return Math.round(baseDelay);
+  if (wordLength <= 12) return Math.round(baseDelay * 1.3);
+  return Math.round(baseDelay * 1.5);
+}
+
+/**
+ * Add pause after punctuation
+ */
+function getPunctuationPause(word) {
+  const lastChar = word.charAt(word.length - 1);
+  if (lastChar === '.' || lastChar === '!' || lastChar === '?') {
+    return 300; // Extra 300ms pause after sentence endings
+  }
+  if (lastChar === ',' || lastChar === ';' || lastChar === ':') {
+    return 150; // Extra 150ms pause after commas/semicolons
+  }
+  return 0;
+}
+
+/**
+ * Highlight word inline (in article body)
+ */
+function highlightInline(wordIndex) {
+  // Remove previous highlight
+  const prevHighlighted = document.querySelector('.flash-word.flash-highlight');
+  if (prevHighlighted) {
+    prevHighlighted.classList.remove('flash-highlight');
+  }
+  
+  // Highlight current word
+  if (wordIndex >= 0 && wordIndex < wordArray.length) {
+    const wordObj = wordArray[wordIndex];
+    wordObj.element.classList.add('flash-highlight');
+    
+    // Auto-scroll if word is off-screen
+    scrollToWordIfNeeded(wordObj.element);
+  }
+}
+
+/**
+ * Scroll to word only if it's off-screen
+ */
+function scrollToWordIfNeeded(element) {
+  const rect = element.getBoundingClientRect();
+  const viewportHeight = window.innerHeight;
+  const headerHeight = 60; // Fixed header height
+  
+  // Check if element is off-screen
+  if (rect.top < headerHeight || rect.bottom > viewportHeight) {
+    element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    });
+  }
+}
+
+/**
+ * Display word in RSVP overlay
+ */
+function displayInOverlay(wordIndex) {
+  const overlay = document.getElementById('flashOverlay');
+  const currentWordEl = document.getElementById('flashCurrentWordDisplay');
+  const prevWordEl = document.getElementById('flashPrevWord');
+  const nextWordEl = document.getElementById('flashNextWord');
+  const currentIndexEl = document.getElementById('flashCurrentWord');
+  
+  if (wordIndex >= 0 && wordIndex < wordArray.length) {
+    const current = wordArray[wordIndex];
+    currentWordEl.textContent = current.text;
+    
+    // Show previous word
+    if (wordIndex > 0) {
+      prevWordEl.textContent = wordArray[wordIndex - 1].text;
+    } else {
+      prevWordEl.textContent = '';
+    }
+    
+    // Show next word
+    if (wordIndex < wordArray.length - 1) {
+      nextWordEl.textContent = wordArray[wordIndex + 1].text;
+    } else {
+      nextWordEl.textContent = '';
+    }
+    
+    // Update progress
+    currentIndexEl.textContent = wordIndex + 1;
+  }
+}
+
+/**
+ * Flash next word (main display loop)
+ */
+function flashNextWord() {
+  if (!isFlashing || isPaused) return;
+  
+  if (currentWordIndex >= wordArray.length) {
+    // Reached end of article
+    stopFlashIt();
+    return;
+  }
+  
+  const word = wordArray[currentWordIndex];
+  
+  // Display word based on mode
+  if (flashMode === 'overlay') {
+    displayInOverlay(currentWordIndex);
+  } else {
+    highlightInline(currentWordIndex);
+  }
+  
+  // Save current position to session storage
+  saveFlashState();
+  
+  // Calculate delay for this word
+  const baseDelay = calculateWordDelay(word.text, flashSpeed);
+  const punctuationPause = getPunctuationPause(word.text);
+  const totalDelay = baseDelay + punctuationPause;
+  
+  // Move to next word
+  currentWordIndex++;
+  
+  // Schedule next word
+  flashTimeout = setTimeout(flashNextWord, totalDelay);
+}
+
+/**
+ * Save Flash It state to session storage
+ */
+async function saveFlashState() {
+  try {
+    await chrome.storage.session.set({
+      flashItState: {
+        wordIndex: currentWordIndex,
+        speed: flashSpeed,
+        mode: flashMode,
+        isPaused: isPaused
+      }
+    });
+  } catch (error) {
+    console.error('Error saving flash state:', error);
+  }
+}
+
+/**
+ * Load Flash It state from session storage
+ */
+async function loadFlashState() {
+  try {
+    const { flashItState } = await chrome.storage.session.get('flashItState');
+    if (flashItState) {
+      currentWordIndex = flashItState.wordIndex || 0;
+      flashSpeed = flashItState.speed || 250;
+      flashMode = flashItState.mode || 'overlay';
+      isPaused = flashItState.isPaused || false;
+      
+      // Update UI
+      document.getElementById('flashSpeed').value = flashSpeed;
+      updateFlashModeButton();
+      
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error loading flash state:', error);
+    return false;
+  }
+}
+
+/**
+ * Start Flash It speed reading
+ */
+async function startFlashIt() {
+  if (isFlashing) return;
+  
+  // Extract words if not already done
+  if (wordArray.length === 0) {
+    wordArray = extractWordsFromArticle();
+    if (wordArray.length === 0) {
+      alert('No readable content found in this article.');
+      return;
+    }
+  }
+  
+  // Load saved state if exists
+  const hasState = await loadFlashState();
+  
+  // Set state
+  isFlashing = true;
+  isPaused = false;
+  
+  // Show overlay if in overlay mode
+  if (flashMode === 'overlay') {
+    const overlay = document.getElementById('flashOverlay');
+    overlay.classList.add('show');
+    document.getElementById('flashTotalWords').textContent = wordArray.length;
+  }
+  
+  // Update UI
+  updateFlashButtons('playing');
+  
+  // Start flashing
+  flashNextWord();
+}
+
+/**
+ * Pause Flash It
+ */
+function pauseFlashIt() {
+  if (!isFlashing) return;
+  
+  isPaused = true;
+  
+  // Clear timeout
+  if (flashTimeout) {
+    clearTimeout(flashTimeout);
+    flashTimeout = null;
+  }
+  
+  // Update UI
+  updateFlashButtons('paused');
+  
+  // Save state
+  saveFlashState();
+}
+
+/**
+ * Resume Flash It
+ */
+function resumeFlashIt() {
+  if (!isFlashing) return;
+  
+  isPaused = false;
+  
+  // Update UI
+  updateFlashButtons('playing');
+  
+  // Continue flashing
+  flashNextWord();
+}
+
+/**
+ * Restart Flash It from beginning
+ */
+function restartFlashIt() {
+  // Clear timeout
+  if (flashTimeout) {
+    clearTimeout(flashTimeout);
+    flashTimeout = null;
+  }
+  
+  // Reset index
+  currentWordIndex = 0;
+  isPaused = false;
+  
+  // If already flashing, restart
+  if (isFlashing) {
+    flashNextWord();
+  }
+  
+  // Save state
+  saveFlashState();
+}
+
+/**
+ * Stop Flash It and cleanup
+ */
+function stopFlashIt() {
+  if (!isFlashing) return;
+  
+  isFlashing = false;
+  isPaused = false;
+  
+  // Clear timeout
+  if (flashTimeout) {
+    clearTimeout(flashTimeout);
+    flashTimeout = null;
+  }
+  
+  // Remove highlights
+  const highlighted = document.querySelector('.flash-word.flash-highlight');
+  if (highlighted) {
+    highlighted.classList.remove('flash-highlight');
+  }
+  
+  // Hide overlay
+  const overlay = document.getElementById('flashOverlay');
+  overlay.classList.remove('show');
+  
+  // Update UI
+  updateFlashButtons('stopped');
+  
+  // Clear session storage
+  try {
+    chrome.storage.session.remove('flashItState');
+  } catch (error) {
+    console.error('Error clearing flash state:', error);
+  }
+}
+
+/**
+ * Toggle between overlay and inline display modes
+ */
+function toggleFlashMode() {
+  const wasFlashing = isFlashing && !isPaused;
+  const wasPaused = isPaused;
+  
+  // Pause if playing
+  if (wasFlashing) {
+    pauseFlashIt();
+  }
+  
+  // Toggle mode
+  flashMode = flashMode === 'overlay' ? 'inline' : 'overlay';
+  
+  // Update button
+  updateFlashModeButton();
+  
+  // Handle overlay visibility
+  const overlay = document.getElementById('flashOverlay');
+  if (flashMode === 'overlay' && isFlashing) {
+    overlay.classList.add('show');
+    document.getElementById('flashTotalWords').textContent = wordArray.length;
+    // Show current word in overlay when switching to overlay mode
+    if (wasPaused && currentWordIndex > 0) {
+      displayInOverlay(currentWordIndex - 1);
+    }
+  } else {
+    overlay.classList.remove('show');
+    // Show current word inline when switching to inline mode
+    if (wasPaused && currentWordIndex > 0) {
+      highlightInline(currentWordIndex - 1);
+    }
+  }
+  
+  // Resume if was playing
+  if (wasFlashing) {
+    resumeFlashIt();
+  }
+  
+  // Save state
+  saveFlashState();
+}
+
+/**
+ * Update Flash It speed
+ */
+function updateFlashSpeed(newSpeed) {
+  flashSpeed = parseInt(newSpeed);
+  
+  // If currently playing, restart with new speed
+  if (isFlashing && !isPaused) {
+    // Clear current timeout
+    if (flashTimeout) {
+      clearTimeout(flashTimeout);
+      flashTimeout = null;
+    }
+    // Restart immediately with new speed
+    flashNextWord();
+  }
+  
+  // Save state
+  saveFlashState();
+}
+
+/**
+ * Update Flash It control buttons visibility
+ */
+function updateFlashButtons(state) {
+  const flashBtn = document.getElementById('flashBtn');
+  const pauseBtn = document.getElementById('flashPause');
+  const playBtn = document.getElementById('flashPlay');
+  const restartBtn = document.getElementById('flashRestart');
+  const overlayPauseBtn = document.getElementById('flashOverlayPause');
+  const overlayPlayBtn = document.getElementById('flashOverlayPlay');
+  
+  if (state === 'playing') {
+    flashBtn.classList.add('active');
+    pauseBtn.style.display = 'flex';
+    playBtn.style.display = 'none';
+    restartBtn.style.display = 'flex';
+    overlayPauseBtn.style.display = 'flex';
+    overlayPlayBtn.style.display = 'none';
+  } else if (state === 'paused') {
+    flashBtn.classList.add('active');
+    pauseBtn.style.display = 'none';
+    playBtn.style.display = 'flex';
+    restartBtn.style.display = 'flex';
+    overlayPauseBtn.style.display = 'none';
+    overlayPlayBtn.style.display = 'flex';
+  } else {
+    flashBtn.classList.remove('active');
+    pauseBtn.style.display = 'none';
+    playBtn.style.display = 'none';
+    restartBtn.style.display = 'none';
+    overlayPauseBtn.style.display = 'flex';
+    overlayPlayBtn.style.display = 'none';
+  }
+}
+
+/**
+ * Update Flash mode toggle button
+ */
+function updateFlashModeButton() {
+  const modeBtn = document.getElementById('flashModeToggle');
+  modeBtn.title = flashMode === 'overlay' ? 'Switch to inline mode' : 'Switch to overlay mode';
+  modeBtn.classList.toggle('active', flashMode === 'inline');
+}
+
 /**
  * Open download modal
- */
+``` */
 function openDownloadModal() {
   const modal = document.getElementById('downloadModal');
   const filenameInput = document.getElementById('filenameInput');
