@@ -1330,8 +1330,41 @@ async function downloadArticleEPUB() {
   let bodyHtml = document.getElementById('articleBody').innerHTML;
   const sourceLink = document.getElementById('sourceLink').href;
   
-  // Extract and convert images to base64
+  // PRE-LOAD: Ensure ALL images are fully loaded before proceeding
   const images = document.getElementById('articleBody').querySelectorAll('img');
+  console.log(`Pre-loading ${images.length} images for EPUB...`);
+  
+  await Promise.all(Array.from(images).map(img => {
+    if (!img.src || img.src.startsWith('data:')) return Promise.resolve();
+    
+    return new Promise((resolve) => {
+      if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        console.log(`✓ Already loaded: ${img.naturalWidth}x${img.naturalHeight}`);
+        resolve();
+      } else {
+        console.log(`Waiting for: ${img.src}`);
+        const timeout = setTimeout(() => {
+          console.error(`Timeout loading: ${img.src}`);
+          resolve(); // Resolve anyway to not block
+        }, 10000);
+        
+        img.onload = () => {
+          clearTimeout(timeout);
+          console.log(`✓ Loaded: ${img.naturalWidth}x${img.naturalHeight}`);
+          resolve();
+        };
+        img.onerror = () => {
+          clearTimeout(timeout);
+          console.error(`✗ Failed to load: ${img.src}`);
+          resolve(); // Resolve anyway to not block other images
+        };
+      }
+    });
+  }));
+  
+  console.log(`All images pre-loaded. Converting to base64...`);
+  
+  // Extract and convert images to base64
   const imageMap = new Map();
   let imageIndex = 0;
   
@@ -1339,36 +1372,63 @@ async function downloadArticleEPUB() {
     const src = img.src;
     if (!src || src.startsWith('data:')) continue;
     
+    // Skip images that failed to load
+    const width = img.naturalWidth;
+    const height = img.naturalHeight;
+    
+    if (!width || !height) {
+      console.warn(`Skipping image with invalid dimensions (${width}x${height}): ${src}`);
+      continue;
+    }
+    
     try {
-      // Fetch the image
-      const response = await fetch(src);
-      const blob = await response.blob();
+      // Use canvas to convert the displayed image to base64
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
       
-      // Get file extension from blob type
-      const mimeType = blob.type || 'image/png';
-      const ext = mimeType.split('/')[1] || 'png';
-      const imageName = `image_${imageIndex}.${ext}`;
+      // Convert to base64 PNG
+      const dataUrl = canvas.toDataURL('image/png');
+      const base64 = dataUrl.split(',')[1];
       
-      // Convert to base64
-      const base64 = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
-        reader.readAsDataURL(blob);
-      });
+      if (!base64 || base64.length < 100) {
+        console.error(`Base64 conversion failed or too small: ${base64?.length || 0} bytes`);
+        continue;
+      }
+      
+      const mimeType = 'image/png';
+      const imageName = `image_${imageIndex}.png`;
       
       imageMap.set(src, { name: imageName, base64, mimeType });
       imageIndex++;
-      console.log(`Embedded image: ${imageName}`);
+      console.log(`✓ Embedded: ${imageName} - ${width}x${height} (${Math.round(base64.length/1024)}KB)`);
     } catch (error) {
-      console.warn('Failed to embed image:', src, error);
+      console.error(`Failed to embed image: ${src}`, error.message);
     }
   }
   
+  console.log(`Replacing ${imageMap.size} image URLs in HTML...`);
+  
   // Replace image URLs in HTML with embedded paths
+  // Must handle both decoded URLs (from img.src) and HTML-encoded versions (& vs &amp;)
   imageMap.forEach((imageData, originalSrc) => {
-    const regex = new RegExp(originalSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-    bodyHtml = bodyHtml.replace(regex, `images/${imageData.name}`);
+    // Create encoded version of URL (& → &amp;)
+    const encodedSrc = originalSrc.replace(/&/g, '&amp;');
+    
+    // Escape special regex characters for both versions
+    const decodedRegex = new RegExp(originalSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    const encodedRegex = new RegExp(encodedSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    
+    // Replace both versions
+    bodyHtml = bodyHtml.replace(decodedRegex, `images/${imageData.name}`);
+    bodyHtml = bodyHtml.replace(encodedRegex, `images/${imageData.name}`);
+    
+    console.log(`✓ Replaced: ${imageData.name}`);
   });
+  
+  console.log('URL replacement complete.');
   
   // Convert HTML to XHTML for EPUB compatibility
   const bodyXHTML = htmlToXHTML(bodyHtml);
