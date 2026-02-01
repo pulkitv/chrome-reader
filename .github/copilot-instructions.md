@@ -1,4 +1,4 @@
-# Chrome Reader Extension - AI Coding Agent Instructions
+# ReadEasy Extension - AI Coding Agent Instructions
 
 ## Project Overview
 

@@ -45,7 +45,7 @@ async function loadArticle() {
     }
 
     // Update document title
-    document.title = currentArticle.title || 'Chrome Reader';
+    document.title = currentArticle.title || 'ReadEasy';
 
     // Display article metadata
     const titleEl = document.getElementById('articleTitle');
@@ -1249,7 +1249,7 @@ function downloadArticleHTML() {
     </main>
     
     <footer class="footer">
-      <p>Downloaded from Chrome Reader Extension</p>
+      <p>Downloaded from ReadEasy Extension</p>
       <p>Original source: <a href="${sourceLink}" target="_blank">${sourceLink}</a></p>
     </footer>
   </div>
@@ -1461,7 +1461,7 @@ async function downloadArticleEPUB() {
     <dc:title>${escapeXML(title)}</dc:title>
     <dc:creator>${escapeXML(byline)}</dc:creator>
     <dc:language>en</dc:language>
-    <dc:publisher>Chrome Reader</dc:publisher>
+    <dc:publisher>ReadEasy</dc:publisher>
     <dc:date>${timestamp}</dc:date>
     <dc:source>${escapeXML(sourceLink)}</dc:source>
     <meta property="dcterms:modified">${timestamp}</meta>
@@ -1589,7 +1589,7 @@ th {
     ${bodyXHTML}
   </div>
   <hr/>
-  <p style="font-size: 0.9em; color: #666;">Downloaded from Chrome Reader Extension</p>
+  <p style="font-size: 0.9em; color: #666;">Downloaded from ReadEasy Extension</p>
 </body>
 </html>`;
   

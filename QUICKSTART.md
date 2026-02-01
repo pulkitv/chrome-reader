@@ -1,4 +1,4 @@
-# Quick Start Guide - Chrome Reader Extension
+# Quick Start Guide - ReadEasy Extension
 
 ## Installation Steps
 
@@ -15,7 +15,7 @@
 
 4. **Pin the Extension (Optional)**
    - Click the puzzle icon in Chrome toolbar
-   - Pin the Chrome Reader extension for easy access
+   - Pin the ReadEasy extension for easy access
 
 ## Test It Out
 
@@ -29,7 +29,7 @@ Try these websites to test the extension:
 ## Usage
 
 1. Navigate to an article
-2. Click the Chrome Reader icon (blue book icon)
+2. Click the ReadEasy icon (blue book icon)
 3. Article opens in a new tab with clean formatting
 
 ## Controls

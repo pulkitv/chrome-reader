@@ -4,7 +4,7 @@
 chrome.action.onClicked.addListener(async (tab) => {
   // Don't run on chrome:// or extension pages
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-    console.log('Cannot run Chrome Reader on this page');
+    console.log('Cannot run ReadEasy on this page');
     return;
   }
 

@@ -1,4 +1,4 @@
-# Chrome Reader Extension
+# ReadEasy Extension
 
 A clean, distraction-free reading experience for Chrome. This extension extracts the main article content from web pages and displays it in a beautifully formatted reader view.
 

@@ -1,4 +1,4 @@
-# 🚀 Installation Guide - Chrome Reader Extension
+# 🚀 Installation Guide - ReadEasy Extension
 
 ## Step-by-Step Installation
 
@@ -25,8 +25,8 @@
 3. Click **"Select"** or **"Open"**
 
 ### Step 4: Verify Installation
-You should see a card for "Chrome Reader" with:
-- ✅ Extension name: **Chrome Reader**
+You should see a card for "ReadEasy" with:
+- ✅ Extension name: **ReadEasy**
 - ✅ Version: **1.0.0**
 - ✅ Blue book icon
 - ✅ Status: **Enabled**
@@ -34,9 +34,9 @@ You should see a card for "Chrome Reader" with:
 
 ### Step 5: Pin the Extension (Recommended)
 1. Click the **puzzle piece icon** (🧩) in Chrome's toolbar
-2. Find **"Chrome Reader"** in the list
+2. Find **"ReadEasy"** in the list
 3. Click the **pin icon** next to it
-4. The Chrome Reader icon will now appear in your toolbar
+4. The ReadEasy icon will now appear in your toolbar
 
 ## ✅ You're Ready!
 
@@ -47,7 +47,7 @@ You should see a card for "Chrome Reader" with:
    - https://en.wikipedia.org/wiki/Web_browser
    - Any news site article
 
-2. **Click the Chrome Reader icon** in your toolbar
+2. **Click the ReadEasy icon** in your toolbar
 
 3. **Enjoy!** The article will open in a clean, readable format
 

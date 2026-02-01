@@ -1,4 +1,4 @@
-# Testing Checklist - Chrome Reader Extension
+# Testing Checklist - ReadEasy Extension
 
 ## Installation Test
 
