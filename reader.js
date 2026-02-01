@@ -240,8 +240,10 @@ function setupEventListeners() {
   document.getElementById('flashBtn').addEventListener('click', () => {
     if (!isFlashing) {
       startFlashIt();
+    } else if (isPaused) {
+      resumeFlashIt();
     } else {
-      stopFlashIt();
+      pauseFlashIt();
     }
   });
   
@@ -253,14 +255,6 @@ function setupEventListeners() {
     changeFlashMode(e.target.value);
   });
   
-  document.getElementById('flashPause').addEventListener('click', () => {
-    pauseFlashIt();
-  });
-  
-  document.getElementById('flashPlay').addEventListener('click', () => {
-    resumeFlashIt();
-  });
-  
   document.getElementById('flashRestart').addEventListener('click', () => {
     restartFlashIt();
   });
@@ -270,12 +264,12 @@ function setupEventListeners() {
     stopFlashIt();
   });
   
-  document.getElementById('flashOverlayPause').addEventListener('click', () => {
-    pauseFlashIt();
-  });
-  
-  document.getElementById('flashOverlayPlay').addEventListener('click', () => {
-    resumeFlashIt();
+  document.getElementById('flashOverlayToggle').addEventListener('click', () => {
+    if (isPaused) {
+      resumeFlashIt();
+    } else {
+      pauseFlashIt();
+    }
   });
   
   document.getElementById('flashOverlayRestart').addEventListener('click', () => {
@@ -984,33 +978,50 @@ function updateFlashSpeed(newSpeed) {
  */
 function updateFlashButtons(state) {
   const flashBtn = document.getElementById('flashBtn');
-  const pauseBtn = document.getElementById('flashPause');
-  const playBtn = document.getElementById('flashPlay');
   const restartBtn = document.getElementById('flashRestart');
-  const overlayPauseBtn = document.getElementById('flashOverlayPause');
-  const overlayPlayBtn = document.getElementById('flashOverlayPlay');
+  const overlayToggleBtn = document.getElementById('flashOverlayToggle');
+  
+  const playIcon = `
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </svg>
+  `;
+  const pauseIcon = `
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="6" y="4" width="4" height="16"/>
+      <rect x="14" y="4" width="4" height="16"/>
+    </svg>
+  `;
+  const overlayPlayIcon = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </svg>
+  `;
+  const overlayPauseIcon = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="6" y="4" width="4" height="16"/>
+      <rect x="14" y="4" width="4" height="16"/>
+    </svg>
+  `;
   
   if (state === 'playing') {
     flashBtn.classList.add('active');
-    pauseBtn.style.display = 'flex';
-    playBtn.style.display = 'none';
+    flashBtn.innerHTML = pauseIcon;
+    flashBtn.title = 'Pause';
     restartBtn.style.display = 'flex';
-    overlayPauseBtn.style.display = 'flex';
-    overlayPlayBtn.style.display = 'none';
+    overlayToggleBtn.innerHTML = overlayPauseIcon;
   } else if (state === 'paused') {
     flashBtn.classList.add('active');
-    pauseBtn.style.display = 'none';
-    playBtn.style.display = 'flex';
+    flashBtn.innerHTML = playIcon;
+    flashBtn.title = 'Resume';
     restartBtn.style.display = 'flex';
-    overlayPauseBtn.style.display = 'none';
-    overlayPlayBtn.style.display = 'flex';
+    overlayToggleBtn.innerHTML = overlayPlayIcon;
   } else {
     flashBtn.classList.remove('active');
-    pauseBtn.style.display = 'none';
-    playBtn.style.display = 'none';
+    flashBtn.innerHTML = playIcon;
+    flashBtn.title = 'Start speed reading';
     restartBtn.style.display = 'none';
-    overlayPauseBtn.style.display = 'flex';
-    overlayPlayBtn.style.display = 'none';
+    overlayToggleBtn.innerHTML = overlayPauseIcon;
   }
 }
 
