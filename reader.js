@@ -868,6 +868,7 @@ function restartFlashIt() {
   
   // If already flashing, restart
   if (isFlashing) {
+    updateFlashButtons('playing');
     flashNextWord();
   }
   
