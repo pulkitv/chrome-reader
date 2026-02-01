@@ -217,6 +217,11 @@ function setupEventListeners() {
     openEmailEpubModal();
   });
 
+  // Merge EPUB button
+  document.getElementById('mergeEpubBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://merge-epubs.vercel.app/' });
+  });
+
   // Email EPUB modal handlers
   document.getElementById('closeEmailEpubModal').addEventListener('click', closeEmailEpubModal);
   document.getElementById('cancelEmailEpub').addEventListener('click', closeEmailEpubModal);
