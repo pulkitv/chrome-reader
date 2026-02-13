@@ -15,6 +15,19 @@ let wordArray = []; // Array of word objects {text, element, length}
 let flashTimeout = null;
 let isPaused = false;
 
+// Text-to-Speech state
+const TTS_WEBAPP_URL = 'https://merge-epubs.vercel.app/#/reader';
+let ttsUtterance = null;
+let ttsQueue = [];
+let ttsQueueIndex = 0;
+let ttsVoice = null;
+let ttsIsPaused = false;
+let ttsText = '';
+let ttsWordOffsets = [];
+let ttsChunkOffsets = [];
+let ttsLastWordIndex = -1;
+let ttsPrevFlashMode = null;
+
 // Initialize reader on page load
 document.addEventListener('DOMContentLoaded', async () => {
   // Set base URL from query parameter to help with image loading
@@ -28,6 +41,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   await loadArticle();
   setupEventListeners();
+  if ('speechSynthesis' in window) {
+    window.addEventListener('beforeunload', () => speechSynthesis.cancel());
+  }
   loadPreferences();
   updateProgressBar();
 });
@@ -221,6 +237,25 @@ function setupEventListeners() {
   document.getElementById('mergeEpubBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://merge-epubs.vercel.app/' });
   });
+
+  // TTS controls
+  document.getElementById('ttsToggleBtn').addEventListener('click', () => {
+    if (!('speechSynthesis' in window)) return;
+
+    if (!speechSynthesis.speaking) {
+      startTtsPlayback();
+    } else if (speechSynthesis.paused) {
+      resumeTtsPlayback();
+    } else {
+      pauseTtsPlayback();
+    }
+  });
+
+  document.getElementById('ttsSendBtn').addEventListener('click', () => {
+    sendArticleToWebapp();
+  });
+
+  initTtsVoices();
 
   // Email EPUB modal handlers
   document.getElementById('closeEmailEpubModal').addEventListener('click', closeEmailEpubModal);
@@ -462,6 +497,332 @@ function displayError(message) {
       </button>
     </div>
   `;
+}
+
+// ===== Text-to-Speech Functions =====
+
+function initTtsVoices() {
+  const voiceSelect = document.getElementById('ttsVoiceSelect');
+  const toggleBtn = document.getElementById('ttsToggleBtn');
+
+  if (!voiceSelect || !toggleBtn) return;
+
+  if (!('speechSynthesis' in window)) {
+    voiceSelect.disabled = true;
+    toggleBtn.disabled = true;
+    toggleBtn.title = 'Text-to-speech not supported';
+    return;
+  }
+
+  populateVoiceSelect(speechSynthesis.getVoices());
+
+  speechSynthesis.addEventListener('voiceschanged', () => {
+    populateVoiceSelect(speechSynthesis.getVoices());
+  });
+
+  voiceSelect.addEventListener('change', () => {
+    const voices = speechSynthesis.getVoices();
+    ttsVoice = voices.find(voice => voice.voiceURI === voiceSelect.value) || null;
+  });
+}
+
+function populateVoiceSelect(voices) {
+  const voiceSelect = document.getElementById('ttsVoiceSelect');
+  if (!voiceSelect) return;
+
+  const previousValue = voiceSelect.value;
+  voiceSelect.innerHTML = '';
+
+  if (!voices || voices.length === 0) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Default voice';
+    voiceSelect.appendChild(option);
+    ttsVoice = null;
+    return;
+  }
+
+  voices.forEach(voice => {
+    const option = document.createElement('option');
+    option.value = voice.voiceURI;
+    option.textContent = `${voice.name} (${voice.lang})`;
+    voiceSelect.appendChild(option);
+  });
+
+  if (previousValue) {
+    voiceSelect.value = previousValue;
+  }
+
+  const selected = voices.find(voice => voice.voiceURI === voiceSelect.value) || voices[0];
+  voiceSelect.value = selected.voiceURI;
+  ttsVoice = selected;
+}
+
+function getArticleTextForTts() {
+  const bodyEl = document.getElementById('articleBody');
+  return bodyEl ? bodyEl.innerText.trim() : '';
+}
+
+function buildTtsChunks(text) {
+  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+  const chunks = [];
+  const maxLen = 1200;
+
+  sentences.forEach(sentence => {
+    let remaining = sentence.trim();
+    while (remaining.length > maxLen) {
+      let splitIndex = remaining.lastIndexOf(' ', maxLen);
+      if (splitIndex < 0) splitIndex = maxLen;
+      chunks.push(remaining.slice(0, splitIndex));
+      remaining = remaining.slice(splitIndex).trim();
+    }
+    if (remaining) chunks.push(remaining);
+  });
+
+  return chunks;
+}
+
+function prepareTtsHighlighting() {
+  if (!wordArray || wordArray.length === 0) {
+    wordArray = extractWordsFromArticle();
+  }
+
+  ttsText = getArticleTextForTts();
+  ttsWordOffsets = buildWordOffsetsFromText(ttsText, wordArray);
+  ttsChunkOffsets = buildChunkOffsets(ttsText, ttsQueue);
+  ttsLastWordIndex = -1;
+
+  if (ttsPrevFlashMode === null) {
+    ttsPrevFlashMode = flashMode;
+  }
+
+  if (flashMode !== 'inline-line') {
+    changeFlashMode('inline-line');
+    const modeSelect = document.getElementById('flashModeSelect');
+    if (modeSelect) modeSelect.value = 'inline-line';
+  }
+}
+
+function buildWordOffsetsFromText(text, words) {
+  const offsets = [];
+  let searchStart = 0;
+
+  words.forEach(word => {
+    const idx = text.indexOf(word.text, searchStart);
+    if (idx !== -1) {
+      offsets.push(idx);
+      searchStart = idx + word.text.length;
+    } else {
+      offsets.push(searchStart);
+    }
+  });
+
+  return offsets;
+}
+
+function buildChunkOffsets(text, chunks) {
+  const offsets = [];
+  let searchStart = 0;
+
+  chunks.forEach(chunk => {
+    const idx = text.indexOf(chunk, searchStart);
+    if (idx !== -1) {
+      offsets.push(idx);
+      searchStart = idx + chunk.length;
+    } else {
+      offsets.push(searchStart);
+      searchStart += chunk.length;
+    }
+  });
+
+  return offsets;
+}
+
+function getWordIndexFromCharOffset(offset) {
+  if (!ttsWordOffsets || ttsWordOffsets.length === 0) return -1;
+
+  let low = 0;
+  let high = ttsWordOffsets.length - 1;
+  let best = 0;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (ttsWordOffsets[mid] <= offset) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return best;
+}
+
+function clearTtsLineHighlight() {
+  const prevOverlay = document.querySelector('.flash-line-highlight-overlay');
+  if (prevOverlay) prevOverlay.remove();
+}
+
+function restoreTtsFlashMode() {
+  if (ttsPrevFlashMode !== null && ttsPrevFlashMode !== flashMode) {
+    changeFlashMode(ttsPrevFlashMode);
+    const modeSelect = document.getElementById('flashModeSelect');
+    if (modeSelect) modeSelect.value = ttsPrevFlashMode;
+  }
+  ttsPrevFlashMode = null;
+}
+
+function startTtsPlayback() {
+  const text = getArticleTextForTts();
+  if (!text) return;
+
+  speechSynthesis.cancel();
+  ttsQueue = buildTtsChunks(text);
+  ttsQueueIndex = 0;
+  ttsIsPaused = false;
+  prepareTtsHighlighting();
+
+  updateTtsButton('playing');
+  speakNextTtsChunk();
+}
+
+function speakNextTtsChunk() {
+  if (ttsQueueIndex >= ttsQueue.length) {
+    updateTtsButton('stopped');
+    clearTtsLineHighlight();
+    restoreTtsFlashMode();
+    return;
+  }
+
+  const chunk = ttsQueue[ttsQueueIndex];
+  const chunkStartOffset = ttsChunkOffsets[ttsQueueIndex] || 0;
+  const initialWordIndex = getWordIndexFromCharOffset(chunkStartOffset);
+  if (initialWordIndex >= 0 && initialWordIndex !== ttsLastWordIndex) {
+    ttsLastWordIndex = initialWordIndex;
+    highlightLine(initialWordIndex);
+  }
+
+  ttsUtterance = new SpeechSynthesisUtterance(chunk);
+  if (ttsVoice) ttsUtterance.voice = ttsVoice;
+
+  ttsUtterance.onboundary = (event) => {
+    if (typeof event.charIndex !== 'number') return;
+    const globalOffset = chunkStartOffset + event.charIndex;
+    const wordIndex = getWordIndexFromCharOffset(globalOffset);
+    if (wordIndex >= 0 && wordIndex !== ttsLastWordIndex) {
+      ttsLastWordIndex = wordIndex;
+      highlightLine(wordIndex);
+    }
+  };
+
+  ttsUtterance.onend = () => {
+    if (!ttsIsPaused) {
+      ttsQueueIndex++;
+      speakNextTtsChunk();
+    }
+  };
+
+  ttsUtterance.onerror = () => {
+    ttsQueueIndex++;
+    speakNextTtsChunk();
+  };
+
+  speechSynthesis.speak(ttsUtterance);
+}
+
+function pauseTtsPlayback() {
+  ttsIsPaused = true;
+  speechSynthesis.pause();
+  updateTtsButton('paused');
+}
+
+function resumeTtsPlayback() {
+  ttsIsPaused = false;
+  speechSynthesis.resume();
+  updateTtsButton('playing');
+}
+
+function stopTtsPlayback() {
+  ttsIsPaused = false;
+  ttsQueue = [];
+  ttsQueueIndex = 0;
+  speechSynthesis.cancel();
+  clearTtsLineHighlight();
+  restoreTtsFlashMode();
+  updateTtsButton('stopped');
+}
+
+function updateTtsButton(state) {
+  const ttsBtn = document.getElementById('ttsToggleBtn');
+  if (!ttsBtn) return;
+
+  const playIcon = `
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M5 9v6h4l5 4V5l-5 4H5z"/>
+      <path d="M16 8c1 .8 1.5 1.8 1.5 3s-.5 2.2-1.5 3"/>
+    </svg>`;
+  const pauseIcon = `
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M5 9v6h4l5 4V5l-5 4H5z"/>
+      <rect x="16" y="7" width="3" height="10"/>
+      <rect x="20" y="7" width="3" height="10"/>
+    </svg>`;
+
+  if (state === 'playing') {
+    ttsBtn.innerHTML = pauseIcon;
+    ttsBtn.title = 'Pause';
+  } else {
+    ttsBtn.innerHTML = playIcon;
+    ttsBtn.title = 'Listen';
+  }
+}
+
+async function sendArticleToWebapp() {
+  if (!TTS_WEBAPP_URL || TTS_WEBAPP_URL.includes('your-webapp')) {
+    alert('Set TTS_WEBAPP_URL in reader.js');
+    return;
+  }
+
+  const articleBody = document.getElementById('articleBody');
+  if (!articleBody) return;
+
+  let cssText = '';
+  try {
+    const cssUrl = chrome.runtime.getURL('reader.css');
+    const cssResponse = await fetch(cssUrl);
+    cssText = await cssResponse.text();
+  } catch (error) {
+    console.warn('Failed to load reader.css for webapp handoff:', error);
+  }
+
+  const payload = {
+    type: 'readeasy-article',
+    title: document.getElementById('articleTitle')?.textContent || '',
+    byline: document.getElementById('articleByline')?.textContent || '',
+    siteName: document.getElementById('articleSite')?.textContent || '',
+    sourceUrl: document.getElementById('sourceLink')?.href || '',
+    html: articleBody.innerHTML,
+    cssText
+  };
+
+  const targetOrigin = new URL(TTS_WEBAPP_URL).origin;
+  const webappWindow = window.open(TTS_WEBAPP_URL, '_blank');
+  if (!webappWindow) {
+    alert('Please allow popups for this site.');
+    return;
+  }
+
+  const sendPayload = () => webappWindow.postMessage(payload, targetOrigin);
+
+  const handler = (event) => {
+    if (event.origin === targetOrigin && event.data === 'readeasy-ready') {
+      sendPayload();
+      window.removeEventListener('message', handler);
+    }
+  };
+
+  window.addEventListener('message', handler);
+  setTimeout(sendPayload, 1500);
 }
 
 // ===== Flash It Speed Reading Functions =====

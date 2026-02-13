@@ -5,7 +5,7 @@
   --max-width-wide: 960px;
   --font-size-base: 18px;
   --line-height: 1.6;
-  --header-height: 60px;
+  --header-height: 96px;
 }
 
 /* Light Theme */
@@ -77,17 +77,30 @@ body {
 }
 
 .header-content {
-  max-width: var(--max-width-normal);
-  margin: 0 auto;
-  padding: 0 20px;
+  max-width: none;
+  margin: 0;
+  padding: 0 16px;
   height: 100%;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  gap: 24px;
 }
 
-.header-left,
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.header-row {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -108,6 +121,23 @@ body {
 
 .icon-btn:hover {
   background-color: var(--border-color);
+}
+
+.text-btn {
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: none;
+  line-height: 1;
+}
+
+.icon-text-btn {
+  gap: 6px;
+}
+
+.icon-text-btn svg {
+  flex-shrink: 0;
 }
 
 .source-link {
@@ -172,13 +202,18 @@ body {
 .font-controls,
 .width-control,
 .download-control,
-.flash-control {
+.flash-control,
+.audio-control {
   display: flex;
   gap: 4px;
 }
 
 /* Flash It Controls */
 .flash-control {
+  align-items: center;
+}
+
+.audio-control {
   align-items: center;
 }
 
