@@ -12,9 +12,11 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
 ⌨️ **Keyboard Shortcuts** - Quick controls for better UX  
 💾 **Persistent Preferences** - Remembers your theme and font settings  
 ⚡ **Flash It Speed Reading** - Three modes for faster reading (RSVP overlay, word highlight, line highlight)  
+🗣️ **Text-to-Speech (TTS)** - Listen to articles with voice selection and synced line highlights  
 📖 **EPUB Export** - Download articles as EPUB files for offline reading  
 📧 **Email EPUB** - Email articles directly from the reader view  
 🔗 **EPUB Merge Tool** - Quick access to merge multiple EPUB files  
+💾 **Save for Later (Web App)** - Send article HTML + styling to your web app via postMessage  
 
 ## Installation
 
@@ -44,9 +46,11 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
    - Toggle between normal and wide content width
    - View the original page with the "Original" link
    - Use Flash It speed reading for faster reading
+   - Listen to the article with TTS (voice selection)
    - Download as HTML or EPUB for offline reading
    - Email EPUB files to yourself or others
    - Access EPUB merge tool to combine multiple files
+   - Save for later to open in your web app reader view
 
 ## Keyboard Shortcuts
 
@@ -114,6 +118,12 @@ Features:
 - Session persistence (remembers position)
 - Keyboard shortcuts (F, Space, R)
 
+### Text-to-Speech (TTS)
+
+- Uses the browser’s built-in Web Speech API
+- Voice selection from available system voices
+- Line highlight syncs with spoken words during playback
+
 ### EPUB Generation
 
 - Creates standards-compliant EPUB 3.0 files
@@ -121,6 +131,11 @@ Features:
 - Includes article metadata (title, author, date)
 - Handles HTML-encoded URLs (`&amp;` to `&`)
 - Can be emailed directly from reader view
+
+### Save for Later (Web App)
+
+- Opens your web app and sends article HTML + CSS via `postMessage`
+- Web app can render the same reader view formatting
 
 ### Security
 
@@ -194,7 +209,8 @@ Want to contribute or modify the extension?
 
 This extension:
 - ✅ Processes all content locally
-- ✅ Does not send data to external servers
+- ✅ Does not send data to external servers by default
+- ✅ Only sends article HTML + CSS when you explicitly click “Save for later”
 - ✅ Only accesses the active tab when clicked
 - ✅ Stores preferences locally using Chrome storage
 

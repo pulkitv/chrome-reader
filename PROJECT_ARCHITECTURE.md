@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as a comprehensive guide for AI coding assistants (Codex, Cursor, GitHub Copilot, etc.) and developers to quickly understand the project structure, architecture, key features, and development patterns without reading the entire codebase.
 
-> **Last Updated**: February 7, 2026
+> **Last Updated**: February 13, 2026
 
 ---
 
@@ -121,6 +121,9 @@ chrome.storage.sync (persists across devices)
 | `.github/copilot-instructions.md` | GitHub Copilot context |
 | `PROJECT_SUMMARY.md` | Quick project overview |
 | `TESTING.md` | Test sites and scenarios |
+| `readeasy-postmessage-listener.js` | Web app listener helper for postMessage payload |
+| `WEBAPP_POSTMESSAGE_README.md` | Web app integration guide for postMessage payload |
+| `privacy-policy.html` | Privacy policy for Chrome Web Store |
 
 ---
 
@@ -271,6 +274,7 @@ else if (/[,;:]$/.test(word)) baseTime += 150;
 - Splits article text into sentence-based chunks to avoid long-utterance limits
 - Voice selection via `speechSynthesis.getVoices()` with dropdown
 - Play/Pause toggle button in toolbar
+- Auto-enables Flash It line mode and highlights current line in sync with TTS word boundaries
 
 **Key Functions**:
 - `initTtsVoices()` - Populate voice list and handle selection
@@ -283,7 +287,7 @@ else if (/[,;:]$/.test(word)) baseTime += 150;
 
 **Flow**:
 1. Opens web app URL in a new tab
-2. Sends article metadata and HTML via `postMessage`
+2. Sends article metadata, HTML, and CSS via `postMessage`
 3. Optional handshake: web app replies with `readeasy-ready` to receive immediately
 
 **Payload Structure**:
@@ -294,7 +298,8 @@ else if (/[,;:]$/.test(word)) baseTime += 150;
   byline,
   siteName,
   sourceUrl,
-  html
+  html,
+  cssText
 }
 ```
 
@@ -722,6 +727,18 @@ else displayTime *= 1.5;                       // Very long
 3. **Toolbar Layout** - Split toolbar into two rows to avoid overflow at 100% zoom
   - Audio controls moved to second row
   - Header height increased for multi-row layout
+
+### February 13, 2026 - TTS Sync + Save for Later UI
+
+**Changes**:
+1. **TTS Line Sync** - Line highlight follows spoken word boundaries during playback
+  - Auto-enables Flash It line mode during TTS
+  - Restores previous Flash It mode after TTS ends
+2. **Save for Later UI** - Replaced icon-only actions with icon+label buttons
+  - Merge EPUBs and Save for later now labeled
+  - Download EPUB also uses icon+label styling
+3. **Web App Handoff Payload** - CSS is included with HTML for consistent rendering
+4. **Toolbar Alignment** - Header content aligned to the left and spacing adjusted
 
 ---
 
