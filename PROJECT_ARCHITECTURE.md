@@ -1378,14 +1378,14 @@ else displayTime *= 1.5;                       // Very long
   - Audio controls moved to second row
   - Header height increased for multi-row layout
 
-### February 13, 2026 - TTS Sync + Save for Later UI
+### February 13, 2026 - TTS Sync + Beta View UI
 
 **Changes**:
 1. **TTS Line Sync** - Line highlight follows spoken word boundaries during playback
   - Auto-enables Flash It line mode during TTS
   - Restores previous Flash It mode after TTS ends
-2. **Save for Later UI** - Replaced icon-only actions with icon+label buttons
-  - Merge EPUBs and Save for later now labeled
+2. **Beta View UI** - Replaced icon-only actions with icon+label buttons
+  - Merge EPUBs and Beta View now labeled
   - Download EPUB also uses icon+label styling
 3. **Web App Handoff Payload** - CSS is included with HTML for consistent rendering
 4. **Toolbar Alignment** - Header content aligned to the left and spacing adjusted

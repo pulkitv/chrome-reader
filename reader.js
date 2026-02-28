@@ -87,7 +87,7 @@ async function loadArticle() {
     }
 
     // Set source link
-    if (currentArticle.sourceUrl) {
+    if (currentArticle.sourceUrl && sourceLink) {
       sourceLink.href = currentArticle.sourceUrl;
     }
 
@@ -415,7 +415,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const sourceEl = document.getElementById('sourceLink');
     const siteEl = document.getElementById('articleSite');
 
-    if (!titleEl || !sourceEl) {
+    if (!titleEl) {
       sendResponse(null);
       return true;
     }
@@ -502,7 +502,8 @@ async function handleAddToReadingList() {
 
   try {
     const title = document.getElementById('articleTitle').textContent;
-    const url = document.getElementById('sourceLink').href;
+    const sourceEl = document.getElementById('sourceLink');
+    const url = sourceEl ? sourceEl.href : window.location.href;
     const siteName = document.getElementById('articleSite').textContent || new URL(url).hostname;
 
     // Collect all remote image src values from the article body
@@ -1623,7 +1624,8 @@ function downloadArticleHTML() {
   const byline = document.getElementById('articleByline').textContent;
   const siteName = document.getElementById('articleSite').textContent;
   const bodyHtml = document.getElementById('articleBody').innerHTML;
-  const sourceLink = document.getElementById('sourceLink').href;
+  const sourceLinkEl = document.getElementById('sourceLink');
+  const sourceLink = sourceLinkEl ? sourceLinkEl.href : window.location.href;
   
   // Build complete HTML document with inline styles
   const htmlContent = `<!DOCTYPE html>
@@ -1886,7 +1888,8 @@ async function downloadArticleEPUB() {
   const byline = document.getElementById('articleByline').textContent || 'Unknown Author';
   const siteName = document.getElementById('articleSite').textContent || 'Unknown Source';
   let bodyHtml = document.getElementById('articleBody').innerHTML;
-  const sourceLink = document.getElementById('sourceLink').href;
+  const sourceLinkEl = document.getElementById('sourceLink');
+  const sourceLink = sourceLinkEl ? sourceLinkEl.href : window.location.href;
   
   // PRE-LOAD: Ensure ALL images are fully loaded before proceeding
   const images = document.getElementById('articleBody').querySelectorAll('img');

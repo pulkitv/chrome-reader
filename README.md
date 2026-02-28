@@ -19,7 +19,7 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
 📚 **Reading List & Side Panel** - Save up to 10 articles (with images) for later, manage and merge them in a native Chrome side panel  
 🗂️ **EPUB Merge** - Combine multiple saved articles into a single EPUB with deduped images and valid XHTML  
 💾 **IndexedDB Storage** - Full article HTML is stored locally for offline access and merging  
-🔗 **Save for Later (Web App)** - Send article HTML + styling to your web app via postMessage  
+🔗 **Beta View** - Send article HTML + styling to your web app via postMessage  
 
 ## Installation
 
@@ -53,7 +53,7 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
    - **Add to Reading List**: Click "Add to List" to save the article (with images) for later
    - **Open the Side Panel**: Use the extension context menu or after saving to view/manage your reading list
    - **Merge & Download EPUB**: In the side panel, select multiple articles and merge them into a single EPUB file
-   - Save for later to open in your web app reader view
+   - **Beta View**: Click to open in your web app reader view
 
 ## Keyboard Shortcuts
 
@@ -140,7 +140,7 @@ Features:
 - Handles HTML-encoded URLs (`&amp;` to `&`)
 - Can be emailed directly from reader view
 
-### Save for Later (Web App)
+### Beta View
 
 - Opens your web app and sends article HTML + CSS via `postMessage`
 - Web app can render the same reader view formatting
@@ -218,7 +218,7 @@ Want to contribute or modify the extension?
 This extension:
 - ✅ Processes all content locally
 - ✅ Does not send data to external servers by default
-- ✅ Only sends article HTML + CSS when you explicitly click “Save for later”
+- ✅ Only sends article HTML + CSS when you explicitly click "Beta View"
 - ✅ Only accesses the active tab when clicked
 - ✅ Stores preferences locally using Chrome storage
 
