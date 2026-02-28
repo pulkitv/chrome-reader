@@ -14,12 +14,13 @@
 <body>
   <h1>ReadEasy Privacy Policy</h1>
 
-  <p><strong>Last updated:</strong> February 28, 2026</p>
+  <p><strong>Last updated:</strong> March 1, 2026</p>
 
   <p>ReadEasy ("the extension") provides a distraction-free reader view by extracting article content from the current page. This privacy policy explains how data is handled.</p>
 
 
   <h2>Data We Collect</h2>
+  <p>ReadEasy complies with applicable privacy laws including GDPR. As the extension does not collect personal data on external servers, GDPR data subject rights (access, deletion, portability) are managed entirely through your browser's built-in controls.</p>
   <p>We do not collect, transmit, or sell any personal data to external servers. The extension processes the current page's <strong>website content</strong> (text, images, links) entirely on your device to render the reader view, manage your Reading List, and generate exports (HTML / EPUB). Text-to-speech playback uses your browser's built-in speech engine, which runs locally on your device.</p>
 
   <p>When you use the <strong>Reading List</strong> or <strong>"Add to List"</strong> features, the full article content (including images converted to base64 PNG data URIs) is stored locally in your browser's IndexedDB. No data is sent to any server during this process — images are fetched directly from the originating website and stored in your browser only.</p>
@@ -44,7 +45,7 @@
   <h2>Data Sharing</h2>
   <p>We do not share or sell data with third parties. The only outbound data transfer occurs when you explicitly use:</p>
   <ul>
-    <li><strong>"Send to Web App"</strong> — article HTML and CSS are sent via <code>postMessage</code> to the web app you open</li>
+    <li><strong>"Beta View"</strong> — article HTML and CSS are sent via <code>postMessage</code> to the web app you open. You can disable this feature by not using the Beta View button.</li>
     <li><strong>Download EPUB / HTML</strong> — files are saved to your device's downloads folder</li>
     <li><strong>Email EPUB</strong> — opens your default email client via a <code>mailto:</code> link; the EPUB is attached client-side</li>
   </ul>
@@ -59,10 +60,23 @@
     <li><code>activeTab</code> — Access the current page only after the user explicitly clicks the extension icon</li>
     <li><code>scripting</code> — Inject the Readability content extraction script into the active tab when triggered by the user</li>
     <li><code>storage</code> — Save preferences, Reading List metadata, and temporary article data to your browser</li>
-    <li><code>sidePanel</code> — Display the native Chrome side panel for your Reading List</li>
+    <li><code>sidePanel</code> — Display the Reading List side panel where users can view, manage, and access saved articles</li>
     <li><code>declarativeNetRequest</code> — Set <code>Referer</code> headers on image requests to certain CDNs (e.g. Substack, Medium) so article images load correctly. No content is inspected or modified.</li>
-    <li><code>contextMenus</code> — Add a right-click context menu on the extension icon to quickly open the Reading List side panel</li>
-    <li><code>host_permissions: &lt;all_urls&gt;</code> — Required so the extension can fetch images from any CDN domain to embed them locally. Without this, cross-origin image fetches would be blocked.</li>
+    <li><code>contextMenus</code> — Add a right-click context menu option for quick access to the Reading List side panel</li>
+    <li><code>host_permissions: &lt;all_urls&gt;</code> — Required so the extension can fetch images from any CDN domain to embed them locally for the Reading List and Beta View features. Without this, cross-origin image fetches would be blocked.</li>
+  </ul>
+
+
+  <h2>Security</h2>
+  <p>ReadEasy stores all article data locally in your browser using Chrome's built-in storage APIs. The extension does not transmit passwords, login tokens, or sensitive payment information. Images are fetched from publicly accessible URLs only.</p>
+
+
+  <h2>User Rights & Data Deletion</h2>
+  <p>You have full control over your data:</p>
+  <ul>
+    <li><strong>Delete Reading List:</strong> Clear all saved articles from IndexedDB via the extension settings</li>
+    <li><strong>Reset Preferences:</strong> Clear theme, font size, and width settings anytime</li>
+    <li><strong>Clear All Data:</strong> Uninstall the extension or clear all site data in Chrome Settings → Privacy → Clear browsing data → Cookies and site data</li>
   </ul>
 
 
