@@ -102,6 +102,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     try {
       if (message.action === 'saveToReadingList') {
+        // Deduplicate — don't save if this URL is already in the list
+        const { readingListMeta: existingMeta = [] } = await chrome.storage.local.get('readingListMeta');
+        const alreadySaved = existingMeta.some(item => item.url === message.article.url);
+        if (alreadySaved) {
+          console.log('Article already in reading list, skipping duplicate:', message.article.url);
+          sendResponse({ success: true, duplicate: true });
+          return;
+        }
+
         // Check if at capacity (10 articles)
         const count = await getArticleCount();
         

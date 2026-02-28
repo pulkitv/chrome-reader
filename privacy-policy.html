@@ -20,39 +20,53 @@
 
 
   <h2>Data We Collect</h2>
-  <p>We do not collect, transmit, or sell personal data. The extension processes the current page’s <strong>website content</strong> (text, images, links) locally on your device to render the reader view, manage your reading list, and generate exports (HTML/EPUB). Text-to-speech playback uses your browser’s built-in speech engine locally on your device. If you use the “Add to List” or “Reading List” features, the full article content (including images) is stored locally in your browser’s IndexedDB and Chrome storage for your use only. If you click the “Save for later” / “Send to Web App” button, the current article’s HTML (and styling) is sent to the web app you choose to open.</p>
+  <p>We do not collect, transmit, or sell any personal data to external servers. The extension processes the current page's <strong>website content</strong> (text, images, links) entirely on your device to render the reader view, manage your Reading List, and generate exports (HTML / EPUB). Text-to-speech playback uses your browser's built-in speech engine, which runs locally on your device.</p>
+
+  <p>When you use the <strong>Reading List</strong> or <strong>"Add to List"</strong> features, the full article content (including images converted to base64 PNG data URIs) is stored locally in your browser's IndexedDB. No data is sent to any server during this process — images are fetched directly from the originating website and stored in your browser only.</p>
+
+  <p>When you click <strong>"Send to Web App" / "Save for later"</strong>, the current article's HTML and styling are sent to the web app URL you choose to open. This is an explicit user action; no data is sent automatically.</p>
 
 
-  <h2>Data We Store</h2>
-  <p>We store user data only in your browser, never on external servers. Data stored includes:</p>
+  <h2>Data We Store Locally</h2>
+  <p>All data is stored only in your browser, never on external servers:</p>
   <ul>
-    <li>Theme selection</li>
-    <li>Font size</li>
-    <li>Content width</li>
-    <li>Reading list metadata (title, URL, site, date) in Chrome local storage</li>
-    <li>Full article HTML (including images) in your browser’s IndexedDB for the Reading List and EPUB merge features</li>
+    <li><strong>chrome.storage.sync</strong> — Theme, font size, and content width preferences (synced across your Chrome profiles)</li>
+    <li><strong>chrome.storage.local</strong> — Reading List metadata: article titles, URLs, site names, and save dates</li>
+    <li><strong>IndexedDB (ReadEasyDB)</strong> — Full article HTML with embedded images for the Reading List and EPUB merge features. Each article may be 5–30 MB depending on image count. Limited to 10 articles.</li>
+    <li><strong>chrome.storage.session</strong> — Current article data held temporarily while the reader tab is open; cleared when the browser session ends</li>
   </ul>
-  <p>The current article may be stored temporarily in session storage to display in the reader tab. No data leaves your device unless you explicitly use export, merge, or share features (e.g., download EPUB, send to web app).</p>
+
+
+  <h2>Image Fetching</h2>
+  <p>When you save an article to your Reading List, the extension fetches images directly from the original website (e.g. cdn.example.com) in order to embed them locally as PNG data URIs. This fetch is performed by the extension itself (not by injecting code into the page), using the <code>host_permissions: &lt;all_urls&gt;</code> permission. No data from these fetches is sent anywhere other than your local IndexedDB.</p>
+
 
   <h2>Data Sharing</h2>
-  <p>We do not share or sell data with third parties. When you explicitly use “Save for later” / “Send to Web App,” the article content (HTML and CSS styling) is transferred to the destination web app you open for the purpose of rendering the article.</p>
+  <p>We do not share or sell data with third parties. The only outbound data transfer occurs when you explicitly use:</p>
+  <ul>
+    <li><strong>"Send to Web App"</strong> — article HTML and CSS are sent via <code>postMessage</code> to the web app you open</li>
+    <li><strong>Download EPUB / HTML</strong> — files are saved to your device's downloads folder</li>
+    <li><strong>Email EPUB</strong> — opens your default email client via a <code>mailto:</code> link; the EPUB is attached client-side</li>
+  </ul>
+
 
   <h2>Remote Code</h2>
-  <p>The extension does not load or execute remote code. All JavaScript is bundled with the extension.</p>
+  <p>The extension does not load or execute remote code. All JavaScript is bundled with the extension package.</p>
 
 
-  <h2>Permissions</h2>
+  <h2>Permissions Explained</h2>
   <ul>
-    <li><code>activeTab</code>: Access the current page only after the user clicks the extension icon.</li>
-    <li><code>scripting</code>: Inject the content extraction script into the active tab.</li>
-    <li><code>storage</code>: Save preferences, reading list metadata, and temporary article data.</li>
-    <li><code>sidePanel</code>: Display the native Chrome side panel for your reading list.</li>
-    <li><code>declarativeNetRequest</code>: Set referrer headers for CDN images to load correctly.</li>
-    <li><code>contextMenus</code>: Add context menu for quick access to the reading list.</li>
+    <li><code>activeTab</code> — Access the current page only after the user explicitly clicks the extension icon</li>
+    <li><code>scripting</code> — Inject the Readability content extraction script into the active tab when triggered by the user</li>
+    <li><code>storage</code> — Save preferences, Reading List metadata, and temporary article data to your browser</li>
+    <li><code>sidePanel</code> — Display the native Chrome side panel for your Reading List</li>
+    <li><code>declarativeNetRequest</code> — Set <code>Referer</code> headers on image requests to certain CDNs (e.g. Substack, Medium) so article images load correctly. No content is inspected or modified.</li>
+    <li><code>contextMenus</code> — Add a right-click context menu on the extension icon to quickly open the Reading List side panel</li>
+    <li><code>host_permissions: &lt;all_urls&gt;</code> — Required so the extension can fetch images from any CDN domain to embed them locally. Without this, cross-origin image fetches would be blocked.</li>
   </ul>
+
 
   <h2>Contact</h2>
   <p>If you have questions, contact: <strong>vashishta.pulkit@gmail.com</strong></p>
 </body>
 </html>
-

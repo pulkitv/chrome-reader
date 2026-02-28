@@ -411,135 +411,148 @@ function setupEventListeners() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'getCurrentArticle') {
     // Get current article data for sidepanel
-    const title = document.getElementById('articleTitle').textContent;
-    const url = document.getElementById('sourceLink').href;
-    const siteName = document.getElementById('articleSite').textContent || new URL(url).hostname;
-    
-    sendResponse({ title, url, siteName });
+    const titleEl = document.getElementById('articleTitle');
+    const sourceEl = document.getElementById('sourceLink');
+    const siteEl = document.getElementById('articleSite');
+
+    if (!titleEl || !sourceEl) {
+      sendResponse(null);
+      return true;
+    }
+
+    const title = titleEl.textContent;
+    const url = sourceEl.href;
+    const siteName = siteEl ? siteEl.textContent : '';
+
+    sendResponse({ title, url, siteName: siteName || new URL(url).hostname });
+  }
+  else if (message.action === 'addToReadingList') {
+    // Side panel is asking us to save the current article
+    handleAddToReadingList()
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
   }
   return true; // Keep channel open for async response
 });
 
 /**
+ * Fetch a remote image URL and convert to a PNG data URL.
+ * Runs in the extension page context (reader.html has <all_urls>) so fetch()
+ * bypasses CORS. Normalises to PNG via canvas for maximum EPUB compatibility.
+ * @param {string} url - Remote image URL
+ * @returns {Promise<string|null>} PNG data URL, or null on any failure
+ */
+async function fetchImageAsPng(url) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    let response;
+    try {
+      response = await fetch(url, { credentials: 'omit', signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      return await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            canvas.getContext('2d').drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+          } catch (e) { reject(e); }
+        };
+        img.onerror = () => reject(new Error('Image decode failed'));
+        img.src = objectUrl;
+      });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  } catch (err) {
+    console.warn('[ReadEasy] Image skipped:', url.substring(0, 100), '—', err.message);
+    return null;
+  }
+}
+
+/**
  * Handle Add to Reading List
+ * Returns a resolved Promise on success, throws on failure.
+ * Can be triggered by button click or by a message from the side panel.
  */
 async function handleAddToReadingList() {
   const addBtn = document.getElementById('addToListBtn');
-  const btnSpan = addBtn.querySelector('span');
-  const originalText = btnSpan.textContent;
-  
+  const btnSpan = addBtn ? addBtn.querySelector('span') : null;
+  const originalText = btnSpan ? btnSpan.textContent : 'Add to List';
+
+  // Open side panel immediately in response to user gesture
+  if (chrome.sidePanel && chrome.windows) {
+    chrome.windows.getCurrent().then(win => {
+      chrome.sidePanel.open({ windowId: win.id });
+    });
+  }
+
+  if (addBtn) addBtn.disabled = true;
+  if (btnSpan) btnSpan.textContent = 'Saving...';
+
   try {
-    // Disable button and show loading state
-    addBtn.disabled = true;
-    btnSpan.textContent = 'Saving...';
-    
-    // Get article data
     const title = document.getElementById('articleTitle').textContent;
     const url = document.getElementById('sourceLink').href;
     const siteName = document.getElementById('articleSite').textContent || new URL(url).hostname;
-    
-    // Pre-load and convert all images to base64 with timeout
-    const images = document.getElementById('articleBody').querySelectorAll('img');
-    console.log(`Loading ${images.length} images for reading list...`);
-    
-    // Image loading with 10s timeout per image
-    const imagePromises = Array.from(images).map(img => {
-      if (!img.src || img.src.startsWith('data:')) return Promise.resolve();
-      
-      return new Promise((resolve, reject) => {
-        // Check if already loaded
-        if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-          resolve();
-          return;
-        }
-        
-        // Set 10s timeout
-        const timeout = setTimeout(() => {
-          reject(new Error(`Image load timeout: ${img.src}`));
-        }, 10000);
-        
-        img.onload = () => {
-          clearTimeout(timeout);
-          resolve();
-        };
-        
-        img.onerror = () => {
-          clearTimeout(timeout);
-          reject(new Error(`Image load error: ${img.src}`));
-        };
-      });
-    });
-    
-    // Wait for all images - if any fail, abort
-    await Promise.all(imagePromises);
-    
-    console.log('All images loaded successfully. Converting to base64...');
-    
-    // Convert images to base64
+
+    // Collect all remote image src values from the article body
+    const allImages = Array.from(document.getElementById('articleBody').querySelectorAll('img'));
+    const remoteImages = allImages.filter(img =>
+      img.src && (img.src.startsWith('http://') || img.src.startsWith('https://'))
+    );
+    console.log(`[ReadEasy] Fetching ${remoteImages.length} images via fetch()...`);
+    if (btnSpan) btnSpan.textContent = 'Loading images...';
+
+    // Fetch + convert to PNG in parallel — allSettled so one failure never aborts all
+    const conversions = await Promise.allSettled(
+      remoteImages.map(img => fetchImageAsPng(img.src))
+    );
+
+    // Replace URLs in the raw HTML using split+join — never use RegExp on base64
     let htmlContent = document.getElementById('articleBody').innerHTML;
-    
-    for (const img of images) {
+    let succeeded = 0;
+    remoteImages.forEach((img, i) => {
+      const result = conversions[i];
+      if (result.status !== 'fulfilled' || !result.value) return;
       const src = img.src;
-      if (!src || src.startsWith('data:')) continue;
-      
-      const width = img.naturalWidth;
-      const height = img.naturalHeight;
-      
-      if (!width || !height) continue;
-      
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        
-        const dataUrl = canvas.toDataURL('image/png');
-        
-        // Replace in HTML (handle both & and &amp;)
-        const encodedSrc = src.replace(/&/g, '&amp;');
-        const decodedRegex = new RegExp(src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-        const encodedRegex = new RegExp(encodedSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-        
-        htmlContent = htmlContent.replace(decodedRegex, dataUrl);
-        htmlContent = htmlContent.replace(encodedRegex, dataUrl);
-      } catch (error) {
-        console.error('Failed to convert image:', error);
-        throw new Error('Failed to process images');
-      }
-    }
-    
-    console.log('Images converted. Sending to background...');
-    
-    // Send to background script
+      const encodedSrc = src.replace(/&/g, '&amp;');
+      htmlContent = htmlContent.split(src).join(result.value);
+      htmlContent = htmlContent.split(encodedSrc).join(result.value);
+      succeeded++;
+    });
+    console.log(`[ReadEasy] ${succeeded}/${remoteImages.length} images converted. Sending to background...`);
+    if (btnSpan) btnSpan.textContent = 'Saving...';
+
     const response = await chrome.runtime.sendMessage({
       action: 'saveToReadingList',
-      article: {
-        title,
-        url,
-        siteName,
-        htmlContent
-      }
+      article: { title, url, siteName, htmlContent }
     });
-    
+
     if (!response.success) {
       throw new Error(response.error || 'Failed to save article');
     }
-    
-    // Show success notification
+
     showNotification('Added to Reading List ✓', 'success');
-    
-    // Open side panel to show the saved article
-    const currentWindow = await chrome.windows.getCurrent();
-    await chrome.sidePanel.open({ windowId: currentWindow.id });
-    
+
   } catch (error) {
     console.error('Error adding to reading list:', error);
     showNotification('Failed to add article: ' + error.message, 'error');
+    // Re-throw so message handler knows it failed
+    throw error;
   } finally {
     // Re-enable button
-    addBtn.disabled = false;
-    btnSpan.textContent = originalText;
+    if (addBtn) addBtn.disabled = false;
+    if (btnSpan) btnSpan.textContent = originalText;
   }
 }
 
@@ -1891,7 +1904,7 @@ async function downloadArticleEPUB() {
         const timeout = setTimeout(() => {
           console.error(`Timeout loading: ${img.src}`);
           resolve(); // Resolve anyway to not block
-        }, 10000);
+        }, 20000);
         
         img.onload = () => {
           clearTimeout(timeout);
