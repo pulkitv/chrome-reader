@@ -814,3 +814,37 @@ body.font-xlarge {
 body.font-xxlarge {
   --font-size-base: 24px;
 }
+
+/* Reader notifications */
+.reader-notification {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background-color: var(--header-bg);
+  color: var(--text-color);
+  padding: 12px 20px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 10001;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+}
+
+.reader-notification.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reader-notification.notification-success {
+  background-color: #28a745;
+  color: white;
+}
+
+.reader-notification.notification-error {
+  background-color: #dc3545;
+  color: white;
+}

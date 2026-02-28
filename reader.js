@@ -255,6 +255,11 @@ function setupEventListeners() {
     sendArticleToWebapp();
   });
 
+  // Add to Reading List button
+  document.getElementById('addToListBtn').addEventListener('click', async () => {
+    await handleAddToReadingList();
+  });
+
   initTtsVoices();
 
   // Email EPUB modal handlers
@@ -398,6 +403,168 @@ function setupEventListeners() {
       restartFlashIt();
     }
   });
+}
+
+/**
+ * Listen for messages from sidepanel
+ */
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'getCurrentArticle') {
+    // Get current article data for sidepanel
+    const title = document.getElementById('articleTitle').textContent;
+    const url = document.getElementById('sourceLink').href;
+    const siteName = document.getElementById('articleSite').textContent || new URL(url).hostname;
+    
+    sendResponse({ title, url, siteName });
+  }
+  return true; // Keep channel open for async response
+});
+
+/**
+ * Handle Add to Reading List
+ */
+async function handleAddToReadingList() {
+  const addBtn = document.getElementById('addToListBtn');
+  const btnSpan = addBtn.querySelector('span');
+  const originalText = btnSpan.textContent;
+  
+  try {
+    // Disable button and show loading state
+    addBtn.disabled = true;
+    btnSpan.textContent = 'Saving...';
+    
+    // Get article data
+    const title = document.getElementById('articleTitle').textContent;
+    const url = document.getElementById('sourceLink').href;
+    const siteName = document.getElementById('articleSite').textContent || new URL(url).hostname;
+    
+    // Pre-load and convert all images to base64 with timeout
+    const images = document.getElementById('articleBody').querySelectorAll('img');
+    console.log(`Loading ${images.length} images for reading list...`);
+    
+    // Image loading with 10s timeout per image
+    const imagePromises = Array.from(images).map(img => {
+      if (!img.src || img.src.startsWith('data:')) return Promise.resolve();
+      
+      return new Promise((resolve, reject) => {
+        // Check if already loaded
+        if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+          resolve();
+          return;
+        }
+        
+        // Set 10s timeout
+        const timeout = setTimeout(() => {
+          reject(new Error(`Image load timeout: ${img.src}`));
+        }, 10000);
+        
+        img.onload = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+        
+        img.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error(`Image load error: ${img.src}`));
+        };
+      });
+    });
+    
+    // Wait for all images - if any fail, abort
+    await Promise.all(imagePromises);
+    
+    console.log('All images loaded successfully. Converting to base64...');
+    
+    // Convert images to base64
+    let htmlContent = document.getElementById('articleBody').innerHTML;
+    
+    for (const img of images) {
+      const src = img.src;
+      if (!src || src.startsWith('data:')) continue;
+      
+      const width = img.naturalWidth;
+      const height = img.naturalHeight;
+      
+      if (!width || !height) continue;
+      
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        
+        const dataUrl = canvas.toDataURL('image/png');
+        
+        // Replace in HTML (handle both & and &amp;)
+        const encodedSrc = src.replace(/&/g, '&amp;');
+        const decodedRegex = new RegExp(src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        const encodedRegex = new RegExp(encodedSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        
+        htmlContent = htmlContent.replace(decodedRegex, dataUrl);
+        htmlContent = htmlContent.replace(encodedRegex, dataUrl);
+      } catch (error) {
+        console.error('Failed to convert image:', error);
+        throw new Error('Failed to process images');
+      }
+    }
+    
+    console.log('Images converted. Sending to background...');
+    
+    // Send to background script
+    const response = await chrome.runtime.sendMessage({
+      action: 'saveToReadingList',
+      article: {
+        title,
+        url,
+        siteName,
+        htmlContent
+      }
+    });
+    
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to save article');
+    }
+    
+    // Show success notification
+    showNotification('Added to Reading List ✓', 'success');
+    
+    // Open side panel to show the saved article
+    const currentWindow = await chrome.windows.getCurrent();
+    await chrome.sidePanel.open({ windowId: currentWindow.id });
+    
+  } catch (error) {
+    console.error('Error adding to reading list:', error);
+    showNotification('Failed to add article: ' + error.message, 'error');
+  } finally {
+    // Re-enable button
+    addBtn.disabled = false;
+    btnSpan.textContent = originalText;
+  }
+}
+
+/**
+ * Show notification toast
+ */
+function showNotification(message, type = 'info') {
+  // Remove existing notifications
+  const existing = document.querySelector('.reader-notification');
+  if (existing) existing.remove();
+  
+  const notification = document.createElement('div');
+  notification.className = `reader-notification notification-${type}`;
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  // Trigger animation
+  setTimeout(() => notification.classList.add('show'), 10);
+  
+  // Auto-remove after 2s
+  setTimeout(() => {
+    notification.classList.remove('show');
+    setTimeout(() => notification.remove(), 300);
+  }, 2000);
 }
 
 /**

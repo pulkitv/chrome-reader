@@ -4,6 +4,7 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
 
 ## Features
 
+
 ✨ **Clean Article Extraction** - Uses Mozilla's Readability library to intelligently extract main content  
 🎨 **Multiple Themes** - Light, Sepia, and Dark themes  
 📏 **Customizable Display** - Adjustable font size and content width  
@@ -15,8 +16,10 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
 🗣️ **Text-to-Speech (TTS)** - Listen to articles with voice selection and synced line highlights  
 📖 **EPUB Export** - Download articles as EPUB files for offline reading  
 📧 **Email EPUB** - Email articles directly from the reader view  
-🔗 **EPUB Merge Tool** - Quick access to merge multiple EPUB files  
-💾 **Save for Later (Web App)** - Send article HTML + styling to your web app via postMessage  
+📚 **Reading List & Side Panel** - Save up to 10 articles (with images) for later, manage and merge them in a native Chrome side panel  
+🗂️ **EPUB Merge** - Combine multiple saved articles into a single EPUB with deduped images and valid XHTML  
+💾 **IndexedDB Storage** - Full article HTML is stored locally for offline access and merging  
+🔗 **Save for Later (Web App)** - Send article HTML + styling to your web app via postMessage  
 
 ## Installation
 
@@ -32,14 +35,12 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
 
 5. **The extension icon** should now appear in your Chrome toolbar
 
+
 ## How to Use
 
 1. **Navigate to any article** or blog post in Chrome
-
 2. **Click the Reader View extension icon** in the toolbar
-
 3. **The article will open** in a new tab with clean formatting
-
 4. **Customize your experience:**
    - Choose between Light, Sepia, or Dark themes
    - Adjust font size with +/- buttons or keyboard shortcuts
@@ -49,7 +50,9 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
    - Listen to the article with TTS (voice selection)
    - Download as HTML or EPUB for offline reading
    - Email EPUB files to yourself or others
-   - Access EPUB merge tool to combine multiple files
+   - **Add to Reading List**: Click "Add to List" to save the article (with images) for later
+   - **Open the Side Panel**: Use the extension context menu or after saving to view/manage your reading list
+   - **Merge & Download EPUB**: In the side panel, select multiple articles and merge them into a single EPUB file
    - Save for later to open in your web app reader view
 
 ## Keyboard Shortcuts
@@ -61,23 +64,28 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
 - `R` - Restart Flash It from beginning
 - `Esc` - Close reader view (or exit Flash It mode)
 
+
 ## File Structure
 
 ```
 chrome-extension/
 ├── manifest.json          # Extension configuration (MV3)
-├── background.js          # Service worker - handles extension clicks
-├── content.js            # Content script - extracts article content
-├── reader.html           # Reader view UI
-├── reader.js             # Reader view functionality & Flash It logic
-├── reader.css            # Reader view styling
-├── rules.json            # declarativeNetRequest rules for image loading
+├── background.js          # Service worker - handles extension clicks, IndexedDB, reading list
+├── content.js             # Content script - extracts article content
+├── reader.html            # Reader view UI
+├── reader.js              # Reader view functionality, Flash It, EPUB, add to list
+├── reader.css             # Reader view styling
+├── sidepanel.html         # Native Chrome side panel for reading list
+├── sidepanel.js           # Side panel logic, list, EPUB merge
+├── sidepanel.css          # Side panel styling, themes
+├── db.js                  # IndexedDB wrapper (used by sidepanel)
+├── rules.json             # declarativeNetRequest rules for image loading
 ├── libs/
-│   ├── Readability.js    # Mozilla Readability library
-│   └── jszip.min.js      # JSZip library for EPUB generation
+│   ├── Readability.js     # Mozilla Readability library
+│   └── jszip.min.js       # JSZip library for EPUB generation
 └── icons/
-    ├── icon16.png
-    ├── icon32.png
+   ├── icon16.png
+   ├── icon32.png
     ├── icon48.png
     └── icon128.png
 ```

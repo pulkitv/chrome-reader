@@ -13,21 +13,26 @@
 </head>
 <body>
   <h1>ReadEasy Privacy Policy</h1>
-  <p><strong>Last updated:</strong> February 13, 2026</p>
+
+  <p><strong>Last updated:</strong> February 28, 2026</p>
 
   <p>ReadEasy ("the extension") provides a distraction-free reader view by extracting article content from the current page. This privacy policy explains how data is handled.</p>
 
+
   <h2>Data We Collect</h2>
-  <p>We do not collect, transmit, or sell personal data. The extension processes the current page’s <strong>website content</strong> (text, images, links) locally on your device to render the reader view and generate exports (HTML/EPUB). Text-to-speech playback uses your browser’s built-in speech engine locally on your device. If you click the “Save for later” / “Send to Web App” button, the current article’s HTML (and styling) is sent to the web app you choose to open.</p>
+  <p>We do not collect, transmit, or sell personal data. The extension processes the current page’s <strong>website content</strong> (text, images, links) locally on your device to render the reader view, manage your reading list, and generate exports (HTML/EPUB). Text-to-speech playback uses your browser’s built-in speech engine locally on your device. If you use the “Add to List” or “Reading List” features, the full article content (including images) is stored locally in your browser’s IndexedDB and Chrome storage for your use only. If you click the “Save for later” / “Send to Web App” button, the current article’s HTML (and styling) is sent to the web app you choose to open.</p>
+
 
   <h2>Data We Store</h2>
-  <p>We store user preferences locally using Chrome storage:</p>
+  <p>We store user data only in your browser, never on external servers. Data stored includes:</p>
   <ul>
     <li>Theme selection</li>
     <li>Font size</li>
     <li>Content width</li>
+    <li>Reading list metadata (title, URL, site, date) in Chrome local storage</li>
+    <li>Full article HTML (including images) in your browser’s IndexedDB for the Reading List and EPUB merge features</li>
   </ul>
-  <p>The current article may be stored temporarily in session storage to display in the reader tab.</p>
+  <p>The current article may be stored temporarily in session storage to display in the reader tab. No data leaves your device unless you explicitly use export, merge, or share features (e.g., download EPUB, send to web app).</p>
 
   <h2>Data Sharing</h2>
   <p>We do not share or sell data with third parties. When you explicitly use “Save for later” / “Send to Web App,” the article content (HTML and CSS styling) is transferred to the destination web app you open for the purpose of rendering the article.</p>
@@ -35,12 +40,15 @@
   <h2>Remote Code</h2>
   <p>The extension does not load or execute remote code. All JavaScript is bundled with the extension.</p>
 
+
   <h2>Permissions</h2>
   <ul>
     <li><code>activeTab</code>: Access the current page only after the user clicks the extension icon.</li>
     <li><code>scripting</code>: Inject the content extraction script into the active tab.</li>
-    <li><code>storage</code>: Save preferences and temporary article data.</li>
+    <li><code>storage</code>: Save preferences, reading list metadata, and temporary article data.</li>
+    <li><code>sidePanel</code>: Display the native Chrome side panel for your reading list.</li>
     <li><code>declarativeNetRequest</code>: Set referrer headers for CDN images to load correctly.</li>
+    <li><code>contextMenus</code>: Add context menu for quick access to the reading list.</li>
   </ul>
 
   <h2>Contact</h2>

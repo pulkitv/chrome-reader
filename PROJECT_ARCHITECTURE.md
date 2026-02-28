@@ -22,13 +22,15 @@
 
 ## Project Overview
 
-**ReadEasy** is a Chrome Manifest V3 extension that provides a distraction-free reading experience with advanced features:
+
+**ReadEasy** is a Chrome Manifest V3 extension for distraction-free reading, now with a persistent Reading List and EPUB merging:
 
 - **Core**: Article extraction using Mozilla Readability
 - **UI**: Themeable reader view with customizable typography
 - **Speed Reading**: Flash It mode with 3 display modes (RSVP, word highlight, line highlight)
-- **Export**: HTML and EPUB download with email support
-- **Storage**: Session storage for data passing, sync storage for preferences
+- **Export**: HTML and EPUB download, email support, and multi-article EPUB merge
+- **Reading List**: Save up to 10 articles (with images) for later, managed in a native Chrome side panel
+- **Storage**: IndexedDB for full article HTML, chrome.storage.local for metadata, session storage for data passing, sync storage for preferences
 
 **Tech Stack**:
 - Vanilla JavaScript (no frameworks)
@@ -40,17 +42,18 @@
 
 ## Architecture & Data Flow
 
-### Four-Component Pipeline
+
+### Five-Component Pipeline (2026+)
 
 ```
-User Click → Background Service Worker → Content Script → Reader View
-   (1)              (2)                      (3)              (4)
+User Click  Background Service Worker  Content Script  Reader View  Side Panel
+  (1)              (2)                      (3)              (4)         (5)
 ```
 
 #### 1. Background Service Worker (`background.js`)
-- **Trigger**: User clicks extension toolbar icon
-- **Action**: Injects content script into active tab
-- **Role**: Coordinator between components
+- **Trigger**: User clicks extension toolbar icon or "Add to List" in reader
+- **Action**: Injects content script, coordinates article extraction, manages IndexedDB and metadata
+- **Role**: Coordinator between all components
 
 #### 2. Content Script (`content.js`)
 - **Execution Context**: Runs in active tab's DOM
@@ -62,16 +65,24 @@ User Click → Background Service Worker → Content Script → Reader View
   - Returns article data to background script
 - **Storage**: Saves article to `chrome.storage.session` (key: `currentArticle`)
 
+
 #### 3. Background Script Response
-- **Action**: Creates new tab with `reader.html`
-- **Data**: Article available via session storage
+- **Action**: Creates new tab with `reader.html` (for reading), or saves article to IndexedDB (for reading list)
+- **Data**: Article available via session storage (for reading) or IndexedDB (for reading list)
 
 #### 4. Reader View (`reader.html/js/css`)
   - Retrieves article from session storage
   - Renders with themes and controls
   - Provides Flash It, export, and customization features
+  - Allows saving to Reading List (sends message to background)
 
-### Storage Architecture
+#### 5. Side Panel (`sidepanel.html/js/css`)
+  - Lists saved articles (metadata from chrome.storage.local, content from IndexedDB)
+  - Allows removing articles, merging multiple into a single EPUB
+  - Handles EPUB generation with deduped images and valid XHTML
+
+
+### Storage Architecture (2026+)
 
 ```
 chrome.storage.session
@@ -84,9 +95,15 @@ chrome.storage.session
 │   ├── excerpt
 │   └── sourceUrl
 └── flashItState            # Flash It playback position
-    ├── wordIndex
-    ├── speed
-    └── mode
+  ├── wordIndex
+  ├── speed
+  └── mode
+
+chrome.storage.local
+├── readingListMeta          # Array of {id, title, url, siteName, addedDate}
+
+IndexedDB (ReadEasyDB)
+├── savedArticles            # Full HTML content for each article (id, htmlContent, ...)
 
 chrome.storage.sync (persists across devices)
 ├── theme                   # light | sepia | dark
@@ -810,3 +827,4 @@ else displayTime *= 1.5;                       // Very long
 ---
 
 **End of Document** - Last updated: February 2, 2026
+
