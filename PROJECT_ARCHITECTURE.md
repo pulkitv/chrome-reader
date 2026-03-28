@@ -2,7 +2,7 @@
 
 > **Purpose**: Comprehensive reference for AI coding assistants and developers. Read this file first in any new chat — it describes every component, data flow, storage scheme, and key implementation decision in the current codebase.
 
-> **Last Updated**: February 28, 2026
+> **Last Updated**: March 28, 2026
 
 ---
 
@@ -31,7 +31,10 @@
 - Text-to-Speech (TTS) playback with line-sync Flash It
 - Web App Handoff — sends article HTML + CSS to an external web app via `postMessage`
 - **Reading List** — save up to 10 articles (with embedded images) to IndexedDB
+- **Inline title editing** — pencil icon in side panel cards to rename saved articles
 - **Merged EPUB export** — combine all saved articles into a single, image-deduplicated EPUB
+- **Merge & Send to X4** — generate merged EPUB in side panel modal and upload to LAN device
+- **Optional image-free X4 EPUB mode** — checkbox-triggered regeneration with live file-size update
 - Single-article EPUB and HTML download from reader view
 
 **Tech Stack:** Vanilla JS, Chrome Extension APIs (MV3), Mozilla Readability.js, JSZip
@@ -70,8 +73,10 @@ User Click
     ▼
 [6] sidepanel.html / sidepanel.js / sidepanel.css
     │  reading list display
+  │  inline title edit (pencil icon + in-card input)
     │  "Add to List" from regular tab → fetchImageAsPng → saveToReadingList
     │  Merge & Download EPUB
+    │  Merge & Send to X4 modal (name/size/firmware/IP/check/upload)
 ```
 
 ### Message Flow: "Add to List" from Reader View
@@ -104,6 +109,28 @@ User Click
 5. reader.js runs `handleAddToReadingList()` (same full pipeline as above)
 6. Reader tab responds `{ success: true }` → sidepanel refreshes
 
+### Message Flow: Edit Saved Article Title (sidepanel inline editor)
+
+1. User clicks the pencil icon on a saved article card
+2. sidepanel enters inline edit mode (input + Save/Cancel)
+3. On Save, sidepanel sends `chrome.runtime.sendMessage({ action: 'updateArticleTitle', id, title })`
+4. background.js validates and updates IndexedDB record (`savedArticles.title`)
+5. background.js updates matching metadata record in `chrome.storage.local.readingListMeta`
+6. background.js broadcasts `listUpdated`; sidepanel re-renders
+7. Future merged EPUB exports use the edited title (loaded from IndexedDB)
+
+### Message Flow: Merge & Send to X4 (sidepanel)
+
+1. User clicks **Merge & Send to X4**
+2. sidepanel loads all full articles from IndexedDB and opens X4 modal
+3. Modal shows editable EPUB name, current size, firmware selector, IP input, connection status, and upload response preview
+4. sidepanel regenerates pending blob for current modal options using `regenerateX4BlobForModal()`
+5. **Exclude Images** toggle updates session-only `x4ExcludeImagesSession` and triggers another regeneration
+6. Regeneration is request-ID guarded (`x4RegenRequestId`) so stale async completions cannot mutate blob/UI
+7. Send/Download buttons are disabled only while latest regeneration is in-flight
+8. If regeneration fails, previous valid blob is retained and user gets a non-blocking toast
+9. On Send, sidepanel uploads multipart `file` to `http://<device-ip>/upload` with adaptive timeout
+
 ---
 
 ## File Structure & Purpose
@@ -112,9 +139,11 @@ User Click
 chrome-extension/
 ├── manifest.json            MV3 config — permissions, side_panel, host_permissions, CSP
 ├── background.js            Service worker — toolbar click handler, IndexedDB helpers,
-│                            saveToReadingList / deleteFromList message handlers, context menu
+│                            saveToReadingList / deleteFromList / updateArticleTitle handlers,
+│                            context menu
 ├── content.js               Injected content script — Readability extraction, URL normalisation
-├── db.js                    IndexedDB wrapper used by sidepanel.js — Promise-based CRUD
+├── db.js                    IndexedDB wrapper used by sidepanel.js — Promise-based CRUD,
+│                            includes title update helper
 │
 ├── reader.html              Reader view UI (214 lines)
 ├── reader.js                Reader view logic (~2400 lines) — article display, themes, font,
@@ -123,9 +152,12 @@ chrome-extension/
 │                            progress bar, notification toasts
 │
 ├── sidepanel.html           Side panel UI — reading list, current article section, storage info
-├── sidepanel.js             Side panel logic (~825 lines) — list render, add/remove, EPUB merge,
-│                            fetchImageAsPng, tab detection, storage change listeners
-├── sidepanel.css            Side panel styles — card layout, toasts, themes
+├── sidepanel.js             Side panel logic (~940 lines) — list render, add/remove,
+│                            inline title edit, EPUB merge/download, X4 modal flow,
+│                            guarded async regeneration, fetchImageAsPng, tab detection,
+│                            storage change listeners
+├── sidepanel.css            Side panel styles — card layout, inline editor, X4 modal,
+│                            toasts, themes
 │
 ├── rules.json               declarativeNetRequest rules — sets Referer header for CDN images
 │                            (Substack, Medium). Add new rules here for blocked CDNs.
@@ -214,6 +246,11 @@ chrome.storage.sync  (persistent, synced across devices)
     ├── theme               'light-theme' | 'sepia-theme' | 'dark-theme'
     ├── fontSize            'font-small' | 'font-normal' | 'font-large' | 'font-xlarge' | 'font-xxlarge'
     └── wideWidth           boolean
+
+chrome.storage.sync  (persistent, synced across devices)
+└── x4Settings
+  ├── firmware            'crosspoint' | 'stock'
+  └── ip                  default '192.168.1.11' (editable)
 ```
 
 ### Metadata vs Content Split
@@ -222,7 +259,11 @@ The reading list uses a **two-tier storage split**:
 - `chrome.storage.local` holds only the lightweight metadata array (IDs, titles, URLs) — this is what the side panel reads to render the list instantly without touching IndexedDB.
 - IndexedDB holds the heavy `htmlContent` (full HTML + base64 images) — only loaded when generating the EPUB.
 
+When editing a saved title, both stores must be updated in the same action: metadata drives sidebar UI, while IndexedDB drives merged EPUB chapter titles and TOC labels.
+
 This split means the side panel list renders fast, and IndexedDB is only opened when actually needed.
+
+For X4 flow, only firmware/IP are persisted (`x4Settings`). The **Exclude Images** choice is intentionally session-only (`x4ExcludeImagesSession` in memory) and resets on sidepanel reload.
 
 ---
 
@@ -304,6 +345,12 @@ htmlContent = htmlContent.split(src.replace(/&/g, '&amp;')).join(dataUrl);
 2. Filters metadata array, saves back to `chrome.storage.local`
 3. Broadcasts `listUpdated`
 
+`updateArticleTitle` handler:
+1. Validates `id` and non-empty trimmed title
+2. Updates IndexedDB record by id (`savedArticles.title`)
+3. Updates matching `readingListMeta` item title
+4. Broadcasts `listUpdated`
+
 ### 4. Side Panel State Management (`sidepanel.js`)
 
 `checkCurrentTab()` runs on every tab activation and update. It classifies the active tab into three cases:
@@ -314,6 +361,16 @@ htmlContent = htmlContent.split(src.replace(/&/g, '&amp;')).join(dataUrl);
 `initPanel()` is debounced (30 ms) so rapid `chrome.storage.onChanged` events (e.g. during batch operations) coalesce into a single re-render.
 
 Both `chrome.storage.onChanged` (primary) and `listUpdated` message (backup) trigger `initPanel()`.
+
+Saved article cards support inline title editing with a top-right pencil icon. Edit mode is card-local and supports keyboard shortcuts:
+- `Enter` = Save
+- `Escape` = Cancel
+
+X4 modal state in sidepanel includes:
+- `pendingX4Articles` and `pendingX4Blob` for current modal session
+- `x4ExcludeImagesSession` (session-only preference)
+- `x4RegenRequestId` and `x4LatestSettledRequestId` for latest-toggle-wins semantics
+- `x4RegenInFlight` to gate Send/Download buttons only during active regeneration
 
 ### 5. Merged EPUB Generation (`sidepanel.js` — `generateMergedEPUB`)
 
@@ -347,6 +404,10 @@ OEBPS/chapter_N.xhtml       One per saved article
 OEBPS/images/image_N.png    Deduplicated embedded images
 ```
 
+`buildMergedEPUBBlob(articles, { includeImages })` supports two modes:
+- `includeImages: true` (default): existing dedup + embedded image behavior
+- `includeImages: false`: strips `<picture>` / `<img>` from chapter HTML and omits image manifest/files for smaller X4 transfer payloads
+
 ### 6. Single-Article EPUB (`reader.js` — `downloadArticleEPUB`)
 
 The reader's own EPUB export uses a slightly different approach: it waits for DOM images to finish loading (`img.complete && naturalWidth > 0`), then draws each to a canvas and embeds as PNG. This is different from the Reading List path because the images are already loaded in the DOM (no extra fetch needed). URL replacement uses `RegExp` with escaped special characters (safe here since the source URL is a `http(s)://` URL, not base64).
@@ -359,593 +420,12 @@ The reader's own EPUB export uses a slightly different approach: it waits for DO
 - `inline-line` — highlights entire line; also used during TTS playback for line-sync
 
 **Timing algorithm:**
-```javascript
-let displayTime = (60 / flashSpeed) * 1000; // base ms per word from WPM
-if (word.length <= 3) displayTime *= 0.8;
-else if (word.length <= 8) displayTime *= 1.0;
-else if (word.length <= 12) displayTime *= 1.3;
-else displayTime *= 1.5;
-if (/[.!?]$/.test(word)) displayTime += 300;
-else if (/[,;:]$/.test(word)) displayTime += 150;
-```
-
-**Word extraction:** Recursively walks text nodes in `#articleBody`, wraps each word in `<span class="flash-word" data-word-index="N">`. Skips script/style/SVG.
-
-**State persistence:** `wordIndex`, `speed`, `mode` saved to `chrome.storage.session` (`flashItState`) on every word advance. Restored on resume.
-
-**Keyboard shortcuts:**
-- `F` — toggle Flash It on/off
-- `Space` — pause/resume while flashing
-- `R` — restart Flash It
-- `+` / `-` — font size (outside Flash It)
-- `Esc` — exit Flash It or close reader tab
-
-### 8. Text-to-Speech (`reader.js`)
-
-Uses the Web Speech API (`speechSynthesis`). Article text is split into sentence-based chunks to work around browser utterance length limits. During TTS playback, Flash It is auto-switched to `inline-line` mode so the current line scrolls into view and gets highlighted as TTS progresses (`onboundary` word events). On TTS end or stop, the previous Flash It mode is restored.
-
-**Key state variables:**
-```javascript
-let ttsQueue = [];          // chunked sentence arrays
-let ttsQueueIndex = 0;      // current chunk
-let ttsWordOffsets = [];    // char offsets for word boundary events
-let ttsPrevFlashMode = null; // Flash It mode to restore after TTS
-```
-
-### 9. Web App Handoff (`reader.js` — `sendArticleToWebapp`)
-
-Opens `TTS_WEBAPP_URL` in a new tab, then sends the article payload via `postMessage`:
-```javascript
-{
-  type: 'readeasy-article',
-  title, byline, siteName, sourceUrl,
-  html,      // article body innerHTML
-  cssText    // reader.css text (fetched from extension resources)
-}
-```
-Supports an optional handshake: if the web app sends `'readeasy-ready'` before the 1.5 s fallback timer fires, the payload is sent immediately. `readeasy-postmessage-listener.js` is a helper snippet for web apps to implement this listener.
-
-### 10. Theme & Typography System (`reader.css`)
-
-CSS custom properties define three themes applied via body class:
-```css
-body.light-theme { --bg-color: #ffffff; --text-color: #333; ... }
-body.sepia-theme { --bg-color: #f4ecd8; ... }
-body.dark-theme  { --bg-color: #1a1a1a; ... }
-```
-Font sizes are also body classes: `font-small` → `font-xxlarge` (16–24 px). Both are saved to `chrome.storage.sync` as `readerPreferences` and restored on next load.
-
-### 11. Referrer Policy Workaround (`rules.json`)
-
-Some CDNs (Substack, Medium) block image requests that don't carry the correct `Referer` header. `declarativeNetRequest` rules intercept these requests and inject `Referer: https://www.google.com/`.
-
-To support a new CDN:
-1. Add a rule to `rules.json` (increment the `id`)
-2. Reload the extension — Chrome rebuilds `_metadata/generated_indexed_rulesets/`
 
 ---
 
-## Critical Implementation Patterns
+## Canonical Scope Note
 
-### Never use RegExp on base64 strings
-Base64 contains `+`, `/`, `=` — all RegExp metacharacters. Always use `str.split(literal).join(replacement)` when replacing data URIs in HTML.
-
-### Always handle both `&` and `&amp;` in URL replacement
-Browsers may HTML-encode `&` as `&amp;` in `innerHTML`. When replacing image URLs, replace both forms:
-```javascript
-htmlContent = htmlContent.split(src).join(dataUrl);
-htmlContent = htmlContent.split(src.replace(/&/g, '&amp;')).join(dataUrl);
-```
-
-### session storage as data bus
-`chrome.storage.session` is used only to pass article data from the background → reader tab. It is NOT used for the reading list (that's IndexedDB + local storage).
-
-### Never open chrome:// pages with extension
-Check `tab.url.startsWith('chrome://')` before injecting scripts.
-
-### Debounce initPanel()
-Rapid storage.onChanged events can fire multiple times in quick succession (e.g. when background.js writes both IndexedDB and metadata). The 30 ms debounce in `initPanel()` prevents duplicate renders.
-
-### EPUB mimetype must be STORE (uncompressed)
-The EPUB spec requires the `mimetype` file to be the first entry and stored uncompressed: `zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' })`.
-
----
-
-## Important Functions Reference
-
-### background.js
-
-| Function | Purpose |
-|---|---|
-| `initDB()` | Open / create IndexedDB |
-| `addArticle(article)` | Insert article into IndexedDB |
-| `deleteArticle(id)` | Remove article from IndexedDB |
-| `getArticleCount()` | Count saved articles |
-| `getOldestArticle()` | Retrieve oldest article (for capacity eviction) |
-| `onMessage('saveToReadingList')` | Dedup, evict oldest if needed, save, update metadata, broadcast |
-| `onMessage('deleteFromList')` | Delete from IDB + metadata, broadcast |
-| `onClicked` (toolbar) | Inject Readability + content.js, save to session, open reader tab |
-
-### content.js
-
-| Function | Purpose |
-|---|---|
-| `makeUrlsAbsolute(clone, base)` | Convert all src/href to absolute, remove srcset, convert data-src |
-| `extractArticle()` | Main entry point — clones document, runs Readability, returns article |
-
-### db.js (IndexedDB wrapper — used by sidepanel.js)
-
-| Function | Purpose |
-|---|---|
-| `initDB()` | Open ReadEasyDB, create store with indexes |
-| `addArticle(article)` | Insert with addedDate timestamp |
-| `getArticle(id)` | Fetch single article by id |
-| `getAllArticles()` | Get all articles ordered by addedDate |
-| `deleteArticle(id)` | Delete by id |
-| `getArticleCount()` | Count articles |
-| `getOldestArticle()` | Get article with smallest addedDate |
-
-### reader.js
-
-| Function | Line | Purpose |
-|---|---|---|
-| `DOMContentLoaded` | ~33 | Entry point — loadArticle, setupEventListeners, loadPreferences |
-| `loadArticle()` | ~54 | Read from session storage, sanitize, display |
-| `sanitizeHtml(html)` | ~120 | Strip scripts, on* attrs, convert iframes |
-| `setupEventListeners()` | ~180 | Bind all toolbar controls, keyboard shortcuts |
-| `setTheme(theme)` | ~608 | Switch body class, save prefs |
-| `updateFontSize()` | ~619 | Apply font class, save prefs |
-| `savePreferences()` | ~633 | Write to chrome.storage.sync |
-| `loadPreferences()` | ~641 | Read from chrome.storage.sync, apply |
-| `fetchImageAsPng(url)` | ~445 | fetch → blob → canvas → PNG data URI (20 s timeout) |
-| `handleAddToReadingList()` | ~488 | Collect imgs, run fetchImageAsPng, patch HTML, sendMessage |
-| `sendArticleToWebapp()` | ~960 | Open TTS_WEBAPP_URL, send postMessage payload |
-| `startFlashIt()` | ~1332 | Extract words, enter Flash It mode |
-| `flashNextWord()` | ~1400 | Advance word with adaptive timing, save state |
-| `pauseFlashIt()` | ~1450 | Pause with state save |
-| `resumeFlashIt()` | ~1465 | Resume from saved position |
-| `restartFlashIt()` | ~1480 | Reset to word 0 |
-| `stopFlashIt()` | ~1500 | Exit, clean up spans and overlay |
-| `changeFlashMode(mode)` | ~1530 | Switch overlay/inline-word/inline-line |
-| `updateFlashSpeed(wpm)` | ~1555 | Update flashSpeed global |
-| `saveFlashState()` | ~1570 | Persist to session storage |
-| `loadFlashState()` | ~1585 | Restore from session storage |
-| `startTtsPlayback()` | ~700 | Chunk text, speak, enable line-sync |
-| `pauseTtsPlayback()` | ~800 | speechSynthesis.pause() |
-| `resumeTtsPlayback()` | ~810 | speechSynthesis.resume() |
-| `downloadArticleEPUB()` | ~1883 | Single-article EPUB — wait for DOM imgs, canvas-embed, JSZip |
-| `openEmailEpubModal()` | ~2100 | Open email modal for EPUB attachment |
-| `showNotification(msg, type)` | ~562 | Toast notification (2 s) |
-
-### sidepanel.js
-
-| Function | Line | Purpose |
-|---|---|---|
-| `initPanel()` | ~27 | Debounced — read metadata, renderArticleList, updateStorageInfo |
-| `setupEventListeners()` | ~52 | Bind add/merge buttons, storage.onChanged, tab listeners |
-| `checkCurrentTab()` | ~105 | Classify active tab, update currentArticle section |
-| `showCurrentArticleSection(data)` | ~186 | Display article info + enable Add to List |
-| `hideCurrentArticleSection(reason)` | ~202 | Show fallback message, disable Add to List |
-| `handleAddToListViaTab(tabId)` | ~213 | Delegate to reader tab via message |
-| `fetchImageAsPng(url)` | ~249 | Identical to reader.js helper |
-| `handleAddToListFromRegularTab(tabId, url)` | ~292 | Inject Readability, fetch images, save |
-| `renderArticleList()` | ~360 | Render article cards from readingListMeta |
-| `createArticleCard(article)` | ~403 | Build card DOM element |
-| `handleRemoveArticle(id)` | ~437 | Send deleteFromList message |
-| `updateStorageInfo()` | ~453 | Calculate and display IDB usage |
-| `handleMergeEPUB()` | ~475 | Entry point for EPUB merge |
-| `generateMergedEPUB(articles)` | ~518 | Full EPUB build with image dedup |
-| `decodeNamedEntities(html)` | ~620 | Decode &nbsp; etc. → Unicode for XHTML |
-| `convertToXHTML(html, title)` | ~630 | Wrap in valid XHTML document |
-| `generateContentOPF(chapters, images)` | ~670 | OPF package manifest |
-| `generateTocNCX(chapters)` | ~730 | EPUB 2 NCX navigation |
-| `generateNavXHTML(chapters)` | ~760 | EPUB 3 nav document |
-| `escapeHtml(str)` | ~800 | HTML entity escape for user content |
-| `showToast(msg, type, duration)` | ~810 | Toast notification |
-
----
-
-## Common Development Tasks
-
-### Add a New Toolbar Button (reader view)
-1. Add button HTML to `reader.html` in the relevant toolbar row
-2. Add event listener in `setupEventListeners()` in `reader.js`
-3. Use existing `.icon-btn` class in `reader.css` or add custom styles
-
-### Add a New Theme
-1. Add CSS variables block to `reader.css`: `body.mytheme-theme { --bg-color: ...; }`
-2. Add `'mytheme-theme'` to the `THEMES` array in `reader.js`
-3. Add theme button to `reader.html`
-
-### Fix Images Not Loading from a New CDN
-1. Check Network tab for 403 or missing Referer
-2. Add a new rule to `rules.json` (increment `id`):
-   ```json
-   { "id": N, "priority": 1,
-     "action": { "type": "modifyHeaders",
-       "requestHeaders": [{ "header": "referer", "operation": "set", "value": "https://www.google.com/" }] },
-     "condition": { "urlFilter": "*cdn.example.com*", "resourceTypes": ["image"] }
-   }
-   ```
-3. Reload the extension (Chrome rebuilds `_metadata/`)
-
-### Increase Reading List Capacity (currently 10)
-Change the `>= 10` check in `background.js` `saveToReadingList` handler. Also update the `storageInfo` display text in `sidepanel.html` and `updateStorageInfo()` in `sidepanel.js`.
-
-### Debug Image Embedding
-- reader.js Add to List: open DevTools on the reader tab, check console for `[ReadEasy] Fetching N images…` and success/skip counts
-- sidepanel.js Add to List: open DevTools on the side panel (inspect → Extensions → ReadEasy side panel), check `[SidePanel]` log lines
-- EPUB merge: check `[EPUB]` log lines for invalid base64 or skipped images
-
-### Debug Side Panel Not Updating
-- Check `chrome.storage.local` via DevTools → Application → Local Storage
-- The side panel listens to `chrome.storage.onChanged` — if it fires, `initPanel()` should run
-- If `listUpdated` message is not received, it's OK — the storage listener is the primary mechanism
-
----
-
-## Chronological Development History
-
-### January 2026 — Initial Extension
-- Article extraction with Readability.js
-- Reader view: light/sepia/dark themes, font size controls, width toggle, progress bar
-- Keyboard shortcuts, preference persistence via `chrome.storage.sync`
-- HTML sanitization, URL normalisation
-
-### Late January 2026 — Flash It Speed Reading
-- Three display modes: RSVP overlay, word highlight (inline-word), line highlight (inline-line)
-- Adaptive timing: word length multipliers + punctuation pauses
-- Speed control 100–1000 WPM, session persistence of playback position
-- Recursive DOM word extraction with `<span class="flash-word">` wrapping
-
-### Late January 2026 — EPUB Export (single-article)
-- JSZip integration, EPUB 3.0 structure
-- Image embedding via canvas (wait for DOM load → drawImage → toDataURL)
-- Fix: HTML-encoded URLs (`&amp;` vs `&`) — replaced both forms
-- Email EPUB via `mailto:` link with base64 attachment
-
-### Early February 2026 — UI Improvements
-- Flash It UI consolidated: 4 buttons → 2 (toggle + restart), dynamic icon/title
-- Merge EPUB toolbar button linking to `merge-epubs.vercel.app`
-- Toolbar split into two rows to prevent overflow at 100% zoom
-
-### February 7, 2026 — TTS + Web App Handoff
-- Text-to-Speech via Web Speech API; sentence-based chunking; voice selector
-- TTS line-sync: auto-enables Flash It `inline-line` mode, restores on TTS end
-- Web App Handoff: `sendArticleToWebapp()` opens external URL, sends HTML + CSS via `postMessage` with optional `readeasy-ready` handshake
-- `readeasy-postmessage-listener.js` helper for web app integration
-
-### February 13, 2026 — Reading List + Side Panel
-- Native Chrome side panel (`sidepanel.html/js/css`)
-- Reading List: save up to 10 articles with embedded images to IndexedDB
-- `db.js`: Promise-based IndexedDB wrapper
-- `background.js`: `saveToReadingList` / `deleteFromList` message handlers; URL deduplication; capacity eviction (FIFO)
-- Two-tier storage: metadata in `chrome.storage.local`, full content in IndexedDB
-- Side panel: tab detection (`checkCurrentTab`), add from reader tab (delegation) or regular tab (inject Readability directly)
-- Merged EPUB: generate multi-chapter EPUB from all saved articles with image deduplication
-- Side panel storage usage indicator
-- `chrome.storage.onChanged` as primary refresh mechanism; debounced `initPanel()`
-
-### February 28, 2026 — Image Pipeline Unification
-- **Problem:** reader.js `handleAddToReadingList()` used canvas-on-DOM approach which failed on CORS-tainted cross-origin images; sidepanel.js used `fetch()` + `FileReader.readAsDataURL()`
-- **Fix:** Both files now use identical `fetchImageAsPng(url)` helper:
-  - `fetch()` with `AbortController` 20 s timeout (bypasses CORS from extension context)
-  - blob → `URL.createObjectURL()` → off-screen `<img>` → canvas → `toDataURL('image/png')`
-  - PNG normalisation for EPUB reader compatibility
-  - `Promise.allSettled` — single failure never aborts the batch
-  - `split+join` replacement — never `RegExp` on base64
-- **EPUB merge improvements:** content-based image deduplication fingerprint (length + start/mid/end samples), named HTML entity decoding for valid XHTML, base64 whitespace stripping
-
-
----
-
-## Table of Contents
-
-1. [Project Overview](#project-overview)
-2. [Architecture & Data Flow](#architecture--data-flow)
-3. [File Structure & Purpose](#file-structure--purpose)
-4. [State Management](#state-management)
-5. [Key Features & Implementation](#key-features--implementation)
-6. [Development Patterns](#development-patterns)
-7. [Important Functions Reference](#important-functions-reference)
-8. [Common Tasks & Workflows](#common-tasks--workflows)
-9. [Chronological Development History](#chronological-development-history)
-
----
-
-## Project Overview
-
-
-**ReadEasy** is a Chrome Manifest V3 extension for distraction-free reading, now with a persistent Reading List and EPUB merging:
-
-- **Core**: Article extraction using Mozilla Readability
-- **UI**: Themeable reader view with customizable typography
-- **Speed Reading**: Flash It mode with 3 display modes (RSVP, word highlight, line highlight)
-- **Export**: HTML and EPUB download, email support, and multi-article EPUB merge
-- **Reading List**: Save up to 10 articles (with images) for later, managed in a native Chrome side panel
-- **Storage**: IndexedDB for full article HTML, chrome.storage.local for metadata, session storage for data passing, sync storage for preferences
-
-**Tech Stack**:
-- Vanilla JavaScript (no frameworks)
-- Chrome Extension APIs (Manifest V3)
-- Mozilla Readability.js (article extraction)
-- JSZip (EPUB generation)
-- CSS custom properties for theming
----
-
-## Architecture & Data Flow
-
-
-### Five-Component Pipeline (2026+)
-
-```
-User Click  Background Service Worker  Content Script  Reader View  Side Panel
-  (1)              (2)                      (3)              (4)         (5)
-```
-
-#### 1. Background Service Worker (`background.js`)
-- **Trigger**: User clicks extension toolbar icon or "Add to List" in reader
-- **Action**: Injects content script, coordinates article extraction, manages IndexedDB and metadata
-- **Role**: Coordinator between all components
-
-#### 2. Content Script (`content.js`)
-- **Execution Context**: Runs in active tab's DOM
-- **Action**: 
-  - Extracts article using Readability.js
-  - Converts all URLs to absolute
-
-  - Fixes CDN image URLs (Substack, Medium)
-  - Returns article data to background script
-- **Storage**: Saves article to `chrome.storage.session` (key: `currentArticle`)
-
-
-#### 3. Background Script Response
-- **Action**: Creates new tab with `reader.html` (for reading), or saves article to IndexedDB (for reading list)
-- **Data**: Article available via session storage (for reading) or IndexedDB (for reading list)
-
-#### 4. Reader View (`reader.html/js/css`)
-  - Retrieves article from session storage
-  - Renders with themes and controls
-  - Provides Flash It, export, and customization features
-  - Allows saving to Reading List (sends message to background)
-
-#### 5. Side Panel (`sidepanel.html/js/css`)
-  - Lists saved articles (metadata from chrome.storage.local, content from IndexedDB)
-  - Allows removing articles, merging multiple into a single EPUB
-  - Handles EPUB generation with deduped images and valid XHTML
-
-
-### Storage Architecture (2026+)
-
-```
-chrome.storage.session
-├── currentArticle           # Article data passed from content → reader
-│   ├── title
-│   ├── byline
-│   ├── content (HTML)
-│   ├── textContent
-│   ├── length
-│   ├── excerpt
-│   └── sourceUrl
-└── flashItState            # Flash It playback position
-  ├── wordIndex
-  ├── speed
-  └── mode
-
-chrome.storage.local
-├── readingListMeta          # Array of {id, title, url, siteName, addedDate}
-
-IndexedDB (ReadEasyDB)
-├── savedArticles            # Full HTML content for each article (id, htmlContent, ...)
-
-chrome.storage.sync (persists across devices)
-├── theme                   # light | sepia | dark
-├── fontSize               # small | medium | large | xlarge | xxlarge
-└── isWideWidth           # boolean
-```
-
----
-
-
-## File Structure & Purpose
-
-### Core Extension Files
-
-| `content.js` | DOM extraction script | Readability execution, URL conversion, data return |
-| `rules.json` | Network request rules | Modifies referrer headers for CDN images |
-
-| File | Purpose | Lines | Key Sections |
-|------|---------|-------|--------------|
-| `reader.html` | UI structure | 214 | Toolbar, article body, Flash It overlay, email modal |
-| `reader.js` | Logic & features | 1875 | Event listeners, Flash It engine, EPUB generation |
-| `reader.css` | Styling & themes | ~800 | Theme variables, responsive layout, Flash It styles |
-
-### Libraries
-
-| File | Purpose | Size | Source |
-|------|---------|------|--------|
-| `libs/Readability.js` | Article extraction | 89KB | Mozilla (minified) |
-| `libs/jszip.min.js` | EPUB generation | ~100KB | JSZip library |
-| `README.md` | User-facing documentation |
-| `PROJECT_ARCHITECTURE.md` | This file - comprehensive dev guide |
-| `.github/copilot-instructions.md` | GitHub Copilot context |
-| `PROJECT_SUMMARY.md` | Quick project overview |
-| `TESTING.md` | Test sites and scenarios |
-| `readeasy-postmessage-listener.js` | Web app listener helper for postMessage payload |
-| `WEBAPP_POSTMESSAGE_README.md` | Web app integration guide for postMessage payload |
-| `privacy-policy.html` | Privacy policy for Chrome Web Store |
-
----
-
-## State Management
-
-### Global State Variables (`reader.js`)
-
-#### Article State
-```javascript
-let article = null;           // Loaded from session storage
-let currentTheme = 'light';   // Theme: light | sepia | dark
-let currentFontSize = 'medium'; // Font: small | medium | large | xlarge | xxlarge
-let isWideWidth = false;      // Content width toggle
-```
-
-#### Flash It State
-```javascript
-let isFlashing = false;       // Is Flash It active?
-let flashMode = 'overlay';    // Mode: overlay | highlight | line
-let flashSpeed = 250;         // WPM (100-1000)
-let currentWordIndex = 0;     // Current word position
-let wordArray = [];           // Array of word objects {text, element}
-let flashTimeout = null;      // setTimeout reference
-let isPaused = false;         // Pause state
-```
-
-#### Text-to-Speech (TTS) State
-```javascript
-const TTS_WEBAPP_URL = 'https://your-webapp.example.com';
-let ttsUtterance = null;       // Current speech utterance
-let ttsQueue = [];             // Chunked text queue
-let ttsQueueIndex = 0;         // Current chunk position
-let ttsVoice = null;           // Selected speech voice
-let ttsIsPaused = false;       // Pause state
-```
-
-#### Reading Progress
-```javascript
-// Calculated on scroll
-scrollPercentage = (scrollTop / (scrollHeight - clientHeight)) * 100
-```
-
-### Storage Keys
-
-**Session Storage** (temporary, tab-specific):
-- `currentArticle` - Article data object
-- `flashItState` - Playback position
-
-**Sync Storage** (persistent, synced):
-- `theme` - User's preferred theme
-- `fontSize` - User's preferred font size
-- `isWideWidth` - Width preference
-
----
-
-## Key Features & Implementation
-
-### 1. Article Extraction
-
-**Location**: `content.js`
-
-**Process**:
-1. Create DocumentClone for Readability
-2. Parse with Readability (options: `charThreshold: 500`)
-3. Convert all relative URLs to absolute:
-   ```javascript
-   new URL(relativeUrl, document.location.href).href
-   ```
-4. Fix CDN URLs:
-   - Remove `srcset` attributes (causes issues)
-   - Fix Substack: `src.replace(/,w_\d+,c_limit,/, ',')`
-   - Convert `data-src` to `src`
-5. Sanitize HTML (remove scripts, event handlers)
-6. Store in session storage
-
-**Key Code**:
-```javascript
-// content.js line ~50
-const article = new Readability(documentClone, {
-  charThreshold: 500,
-  keepClasses: true
-}).parse();
-```
-
-### 2. Flash It Speed Reading
-
-**Location**: `reader.js` lines 467-1100
-
-**Three Display Modes**:
-
-1. **RSVP Overlay** (`flashMode = 'overlay'`)
-   - Displays words centered on screen
-   - Font size: 2x normal
-   - Shows previous and next words for context
-   - Implementation: Updates `#flashOverlayWord` innerHTML
-
-2. **Word Highlight** (`flashMode = 'highlight'`)
-   - Highlights each word in article body
-   - Auto-scrolls if word off-screen
-   - Implementation: Adds `.flash-active` class to word spans
-
-3. **Line Highlight** (`flashMode = 'line'`)
-   - Highlights entire lines
-   - Faster for experienced readers
-   - Implementation: Adds `.flash-active-line` class
-
-**Timing Algorithm**:
-```javascript
-// Base time from WPM
-let baseTime = (60 / flashSpeed) * 1000;
-
-// Adjust for word length
-if (word.length <= 3) baseTime *= 0.8;
-else if (word.length <= 8) baseTime *= 1.0;
-else if (word.length <= 12) baseTime *= 1.3;
-else baseTime *= 1.5;
-
-// Add punctuation pauses
-if (/[.!?]$/.test(word)) baseTime += 300;
-else if (/[,;:]$/.test(word)) baseTime += 150;
-```
-
-**Word Extraction**:
-- Recursively walks text nodes in `#articleBody`
-- Wraps each word in `<span class="flash-word" data-word-index="N">`
-- Skips script/style/SVG elements
-- Preserves whitespace
-
-**State Persistence**:
-- Saves `wordIndex`, `speed`, `mode` to session storage on every word
-- Restores position when resuming
-
-**Key Functions**:
-- `startFlashIt()` - Initialize Flash It mode
-- `flashNextWord()` - Advance to next word with timing
-- `pauseFlashIt()` - Pause playback
-- `resumeFlashIt()` - Resume from current position
-- `restartFlashIt()` - Reset to beginning
-- `stopFlashIt()` - Exit and cleanup
-- `updateFlashButtons()` - Update UI button states
-
-### 3. Text-to-Speech Playback
-
-**Location**: `reader.js` (TTS functions section)
-
-**Playback**:
-- Uses Web Speech API (`speechSynthesis`)
-- Splits article text into sentence-based chunks to avoid long-utterance limits
-- Voice selection via `speechSynthesis.getVoices()` with dropdown
-- Play/Pause toggle button in toolbar
-- Auto-enables Flash It line mode and highlights current line in sync with TTS word boundaries
-
-**Key Functions**:
-- `initTtsVoices()` - Populate voice list and handle selection
-- `startTtsPlayback()` / `pauseTtsPlayback()` / `resumeTtsPlayback()`
-- `buildTtsChunks(text)` - Chunking strategy for long articles
-
-### 4. Web App Handoff (HTML via postMessage)
-
-**Purpose**: Send article HTML to an external web app that can render or convert content (e.g., TTS download service).
-
-**Flow**:
-1. Opens web app URL in a new tab
-2. Sends article metadata, HTML, and CSS via `postMessage`
-3. Optional handshake: web app replies with `readeasy-ready` to receive immediately
-
-**Payload Structure**:
-```javascript
-{
-  type: 'readeasy-article',
-  title,
-  byline,
+Duplicate legacy sections were removed on March 28, 2026 to keep this file a single-source architecture reference for new context windows.
   siteName,
   sourceUrl,
   html,
@@ -1390,13 +870,39 @@ else displayTime *= 1.5;                       // Very long
 3. **Web App Handoff Payload** - CSS is included with HTML for consistent rendering
 4. **Toolbar Alignment** - Header content aligned to the left and spacing adjusted
 
+### March 28, 2026 - Reading List Inline Title Editing
+
+**Changes**:
+1. **Inline Edit UX** - Added top-right pencil icon on each saved article card in side panel
+  - Click enters in-card edit mode with input + Save/Cancel
+  - Keyboard support: Enter (save), Escape (cancel)
+2. **Persistence Consistency** - Added `updateArticleTitle` background message handler
+  - Updates `chrome.storage.local.readingListMeta` title (side panel UI source)
+  - Updates IndexedDB `savedArticles.title` (merged EPUB source)
+3. **EPUB Integration** - Merged EPUB now uses edited titles for chapter headings and TOC labels
+
+### March 28, 2026 - Merge & Send to X4 + Exclude Images
+
+**Changes**:
+1. **X4 Modal Workflow** - Added sidepanel action + modal for merged EPUB transfer to device
+  - Editable EPUB name, firmware selector, IP input, connection refresh
+  - Upload response preview panel for server output
+2. **Device Upload Path** - Multipart upload to `POST /upload` with `file` field
+  - Implemented adaptive timeout based on file size to support large EPUBs
+3. **Exclude Images Toggle** - Added modal checkbox to regenerate image-free EPUB
+  - File size updates live after regeneration
+  - Setting is session-only (not persisted to storage)
+4. **Concurrency Safety** - Added monotonic request-ID guarding for async regeneration
+  - Stale completions cannot overwrite newer blob/UI state
+  - Send/Download disabled only while latest regeneration is in-flight
+  - Previous valid blob is retained on regeneration failure
+
 ---
 
 ## Future Enhancement Ideas
 
 **Potential Features to Add**:
 - [ ] Reader mode detection (auto-suggest when user lands on article)
-- [ ] Reading list / bookmarks
 - [ ] Highlighting and annotations
 - [ ] Print stylesheet for clean printing
 - [ ] More Flash It customization (background color, font, etc.)
@@ -1428,6 +934,8 @@ else displayTime *= 1.5;                       // Very long
 | Toolbar HTML | reader.html | 20-120 |
 | Keyboard shortcuts | reader.js | 320-380 |
 | CDN referrer rules | rules.json | All |
+| X4 modal workflow | sidepanel.js / sidepanel.html | X4 handlers + modal section |
+| Exclude Images regeneration guards | sidepanel.js | `regenerateX4BlobForModal()` |
 
 ---
 
@@ -1450,7 +958,7 @@ else displayTime *= 1.5;                       // Very long
 - Convert URLs to absolute
 - Use session storage for temporary data, sync storage for preferences
 
-**Common gotcas**:
+**Common gotchas**:
 - Manifest V3 requires service workers, not background pages
 - activeTab permission only active when user clicks toolbar
 - Session storage has ~10MB limit
@@ -1459,5 +967,5 @@ else displayTime *= 1.5;                       // Very long
 
 ---
 
-**End of Document** - Last updated: February 2, 2026
+**End of Document** - Last updated: March 28, 2026
 

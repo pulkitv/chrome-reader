@@ -44,16 +44,73 @@
     </div>
   </div>
 
-  <!-- Footer with merge button -->
+  <!-- Footer with merge actions -->
   <footer class="panel-footer">
-    <button id="mergeEpubBtn" class="btn-secondary" disabled>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M8 12V4M8 4L5 7M8 4L11 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M3 14H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      <span>Merge & Download EPUB</span>
-    </button>
+    <div class="footer-actions">
+      <button id="mergeEpubBtn" class="btn-secondary" disabled>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 12V4M8 4L5 7M8 4L11 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M3 14H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span>Merge & Download EPUB</span>
+      </button>
+
+      <button id="mergeSendX4Btn" class="btn-x4" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Merge & Send to X4</span>
+      </button>
+    </div>
   </footer>
+
+  <!-- Merge & Send to X4 modal -->
+  <div id="x4Modal" class="x4-modal" aria-hidden="true">
+    <div class="x4-modal-content" role="dialog" aria-modal="true" aria-labelledby="x4ModalTitle">
+      <div class="x4-modal-header">
+        <h2 id="x4ModalTitle">Send to X4</h2>
+        <button id="x4ModalCloseBtn" class="x4-close-btn" aria-label="Close">×</button>
+      </div>
+
+      <div class="x4-modal-body">
+        <label class="x4-label" for="x4EpubName">EPUB Name</label>
+        <input id="x4EpubName" class="x4-input" type="text" maxlength="180" />
+
+        <div class="x4-file-size-row">
+          <span class="x4-size-label">File Size</span>
+          <span id="x4EpubSize" class="x4-size-value">-</span>
+        </div>
+
+        <label class="x4-checkbox-row" for="x4ExcludeImages">
+          <input id="x4ExcludeImages" type="checkbox" />
+          <span>Exclude Images</span>
+        </label>
+
+        <div class="x4-action-row">
+          <button id="x4SendBtn" class="btn-x4">Send to X4</button>
+          <button id="x4DownloadBtn" class="btn-secondary">Download EPUB</button>
+        </div>
+
+        <div class="x4-settings-section">
+          <label class="x4-label" for="x4FirmwareSelect">Firmware Type</label>
+          <select id="x4FirmwareSelect" class="x4-select">
+            <option value="crosspoint">CrossPoint firmware</option>
+            <option value="stock">Stock firmware official</option>
+          </select>
+
+          <label class="x4-label" for="x4DeviceIp">Device IP Address</label>
+          <div class="x4-ip-row">
+            <input id="x4DeviceIp" class="x4-input" type="text" value="192.168.1.11" />
+            <button id="x4CheckConnectionBtn" class="btn-outline">Refresh</button>
+          </div>
+
+          <div id="x4ConnectionStatus" class="x4-connection-status">Connection not checked.</div>
+          <div id="x4ResponsePreview" class="x4-response-preview" hidden></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Toast container for notifications -->
   <div id="toastContainer" class="toast-container"></div>

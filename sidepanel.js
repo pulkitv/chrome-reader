@@ -9,6 +9,17 @@ let currentArticleData = null;
 let currentReaderTabId = null;   // Tab ID when active tab is reader.html
 let currentRegularTabId = null;  // Tab ID when active tab is a normal website
 let currentRegularTabUrl = null; // URL of the active regular website tab
+let pendingX4Blob = null;
+let pendingX4DefaultName = '';
+let pendingX4Articles = [];
+let pendingX4SizeText = '-';
+let x4ExcludeImagesSession = false;
+let x4RegenRequestId = 0;
+let x4LatestSettledRequestId = 0;
+let x4RegenInFlight = false;
+
+const X4_DEFAULT_IP = '192.168.1.11';
+const X4_SETTINGS_KEY = 'x4Settings';
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -64,6 +75,38 @@ function setupEventListeners() {
   // Merge EPUB button
   document.getElementById('mergeEpubBtn').addEventListener('click', async () => {
     await handleMergeEPUB();
+  });
+
+  // Merge & Send to X4 button
+  document.getElementById('mergeSendX4Btn').addEventListener('click', async () => {
+    await handleMergeAndSendToX4();
+  });
+
+  // X4 modal controls
+  document.getElementById('x4ModalCloseBtn').addEventListener('click', () => closeX4Modal());
+  document.getElementById('x4DownloadBtn').addEventListener('click', () => handleX4Download());
+  document.getElementById('x4SendBtn').addEventListener('click', async () => {
+    await handleSendToX4();
+  });
+  document.getElementById('x4CheckConnectionBtn').addEventListener('click', async () => {
+    await handleCheckX4Connection();
+  });
+  document.getElementById('x4ExcludeImages').addEventListener('change', async (e) => {
+    x4ExcludeImagesSession = !!e.target.checked;
+    await regenerateX4BlobForModal();
+  });
+
+  document.getElementById('x4Modal').addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'x4Modal') {
+      closeX4Modal();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('x4Modal');
+      if (modal.classList.contains('open')) closeX4Modal();
+    }
   });
   
   // Reload when readingListMeta changes in storage (primary mechanism)
@@ -371,6 +414,7 @@ async function handleAddToListFromRegularTab(tabId, tabUrl) {
 async function renderArticleList() {
   const listContainer = document.getElementById('articleList');
   const mergeBtn = document.getElementById('mergeEpubBtn');
+  const mergeSendBtn = document.getElementById('mergeSendX4Btn');
   
   // Clear existing content
   listContainer.innerHTML = '';
@@ -388,6 +432,7 @@ async function renderArticleList() {
       </div>
     `;
     mergeBtn.disabled = true;
+    mergeSendBtn.disabled = true;
     return;
   }
   
@@ -398,6 +443,7 @@ async function renderArticleList() {
   });
   
   mergeBtn.disabled = false;
+  mergeSendBtn.disabled = false;
 }
 
 /**
@@ -407,6 +453,7 @@ function createArticleCard(article) {
   const card = document.createElement('div');
   card.className = 'article-card saved-article';
   card.dataset.id = article.id;
+  card.dataset.originalTitle = article.title || 'Untitled';
   
   const date = new Date(article.addedDate);
   const formattedDate = date.toLocaleDateString('en-US', { 
@@ -416,12 +463,55 @@ function createArticleCard(article) {
   });
   
   card.innerHTML = `
+    <button class="edit-icon-btn edit-btn" data-id="${article.id}" title="Edit title" aria-label="Edit title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 21h4l11-11-4-4L3 17v4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14 6l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
     <div class="article-title">${escapeHtml(article.title)}</div>
+    <div class="title-edit-row">
+      <input class="title-edit-input" type="text" maxlength="300" aria-label="Edit article title" />
+      <button class="btn-save save-title-btn">Save</button>
+      <button class="btn-cancel cancel-edit-btn">Cancel</button>
+    </div>
     <div class="article-meta">${escapeHtml(article.siteName)} • ${formattedDate}</div>
     <div class="article-actions">
       <button class="btn-danger remove-btn" data-id="${article.id}">Remove</button>
     </div>
   `;
+
+  const titleInput = card.querySelector('.title-edit-input');
+  titleInput.value = article.title || 'Untitled';
+
+  // Add edit button handler
+  card.querySelector('.edit-icon-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    startInlineTitleEdit(card);
+  });
+
+  // Save title handler
+  card.querySelector('.save-title-btn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await saveInlineTitleEdit(card, article.id);
+  });
+
+  // Cancel edit handler
+  card.querySelector('.cancel-edit-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    cancelInlineTitleEdit(card);
+  });
+
+  // Keyboard handlers for inline input
+  titleInput.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      await saveInlineTitleEdit(card, article.id);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelInlineTitleEdit(card);
+    }
+  });
   
   // Add remove button handler
   card.querySelector('.remove-btn').addEventListener('click', async (e) => {
@@ -430,6 +520,53 @@ function createArticleCard(article) {
   });
   
   return card;
+}
+
+/**
+ * Enter inline title edit mode for a card
+ */
+function startInlineTitleEdit(card) {
+  // Close any other open editors first
+  document.querySelectorAll('.saved-article.is-editing').forEach(openCard => {
+    if (openCard !== card) cancelInlineTitleEdit(openCard);
+  });
+
+  card.classList.add('is-editing');
+  const input = card.querySelector('.title-edit-input');
+  input.value = card.dataset.originalTitle || input.value || '';
+  input.focus();
+  input.select();
+}
+
+/**
+ * Cancel inline title edit mode for a card
+ */
+function cancelInlineTitleEdit(card) {
+  const input = card.querySelector('.title-edit-input');
+  if (input) input.value = card.dataset.originalTitle || input.value || '';
+  card.classList.remove('is-editing');
+}
+
+/**
+ * Save inline title edit for a card
+ */
+async function saveInlineTitleEdit(card, id) {
+  const input = card.querySelector('.title-edit-input');
+  const originalTitle = (card.dataset.originalTitle || '').trim();
+  const trimmed = (input?.value || '').trim();
+
+  if (!trimmed) {
+    showToast('Title cannot be empty', 'error', 2000);
+    input?.focus();
+    return;
+  }
+
+  if (trimmed === originalTitle) {
+    cancelInlineTitleEdit(card);
+    return;
+  }
+
+  await handleEditTitle(id, trimmed);
 }
 
 /**
@@ -451,6 +588,35 @@ async function handleRemoveArticle(id) {
   } catch (error) {
     console.error('Error removing article:', error);
     showToast('Failed to remove article', 'error');
+  }
+}
+
+/**
+ * Handle edit article title
+ */
+async function handleEditTitle(id, newTitle) {
+  const trimmed = (newTitle || '').trim();
+  if (!trimmed) {
+    showToast('Title cannot be empty', 'error', 2000);
+    return;
+  }
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'updateArticleTitle',
+      id,
+      title: trimmed
+    });
+
+    if (response && response.success) {
+      showToast('Title updated ✓', 'success', 2000);
+      await initPanel();
+    } else {
+      throw new Error((response && response.error) || 'Failed to update title');
+    }
+  } catch (error) {
+    console.error('Error updating title:', error);
+    showToast(error.message || 'Failed to update title', 'error');
   }
 }
 
@@ -513,10 +679,426 @@ async function handleMergeEPUB() {
 }
 
 /**
- * Generate a merged EPUB file from all saved articles and trigger download
- * @param {Array} articles - Array of article objects from IndexedDB
+ * Handle merge and open Send to X4 modal
  */
-async function generateMergedEPUB(articles) {
+async function handleMergeAndSendToX4() {
+  const mergeSendBtn = document.getElementById('mergeSendX4Btn');
+
+  try {
+    mergeSendBtn.disabled = true;
+    mergeSendBtn.querySelector('span').textContent = 'Generating EPUB...';
+
+    if (typeof JSZip === 'undefined') {
+      throw new Error('JSZip library not loaded');
+    }
+
+    const articles = await getAllArticles();
+    if (articles.length === 0) {
+      throw new Error('No articles to merge');
+    }
+
+    pendingX4Articles = articles;
+    pendingX4Blob = null;
+    pendingX4SizeText = '-';
+    pendingX4DefaultName = `ReadEasy_Merged_${new Date().toISOString().split('T')[0]}.epub`;
+
+    await openX4Modal();
+  } catch (error) {
+    console.error('Error preparing EPUB for X4:', error);
+    showToast('Could not prepare EPUB: ' + error.message, 'error');
+  } finally {
+    mergeSendBtn.disabled = readingListMeta.length === 0;
+    mergeSendBtn.querySelector('span').textContent = 'Merge & Send to X4';
+  }
+}
+
+/**
+ * Open Send to X4 modal with prepared EPUB metadata
+ */
+async function openX4Modal() {
+  const modal = document.getElementById('x4Modal');
+  const nameInput = document.getElementById('x4EpubName');
+  const sizeEl = document.getElementById('x4EpubSize');
+  const firmwareSelect = document.getElementById('x4FirmwareSelect');
+  const ipInput = document.getElementById('x4DeviceIp');
+  const statusEl = document.getElementById('x4ConnectionStatus');
+  const responsePreviewEl = document.getElementById('x4ResponsePreview');
+  const excludeImagesCheckbox = document.getElementById('x4ExcludeImages');
+
+  const settings = await loadX4Settings();
+  firmwareSelect.value = settings.firmware || 'crosspoint';
+  ipInput.value = settings.ip || X4_DEFAULT_IP;
+  excludeImagesCheckbox.checked = !!x4ExcludeImagesSession;
+
+  nameInput.value = pendingX4DefaultName || `ReadEasy_Merged_${new Date().toISOString().split('T')[0]}.epub`;
+  sizeEl.textContent = pendingX4SizeText;
+  statusEl.textContent = 'Connection not checked.';
+  statusEl.classList.remove('success', 'error');
+  responsePreviewEl.hidden = true;
+  responsePreviewEl.textContent = '';
+
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  setX4ActionButtonsEnabled(false);
+
+  // Build initial blob using current session-scoped image toggle
+  regenerateX4BlobForModal();
+
+  nameInput.focus();
+  nameInput.select();
+}
+
+/**
+ * Close Send to X4 modal
+ */
+function closeX4Modal() {
+  const modal = document.getElementById('x4Modal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+/**
+ * Enable/disable X4 action buttons (send + download)
+ */
+function setX4ActionButtonsEnabled(enabled) {
+  const sendBtn = document.getElementById('x4SendBtn');
+  const downloadBtn = document.getElementById('x4DownloadBtn');
+  sendBtn.disabled = !enabled;
+  downloadBtn.disabled = !enabled;
+}
+
+/**
+ * Regenerate pending X4 EPUB blob for current modal options.
+ * Uses monotonic request IDs so stale async completions cannot mutate UI/blob.
+ */
+async function regenerateX4BlobForModal() {
+  const modal = document.getElementById('x4Modal');
+  const sizeEl = document.getElementById('x4EpubSize');
+  const statusEl = document.getElementById('x4ConnectionStatus');
+
+  if (!modal.classList.contains('open')) return;
+  if (!pendingX4Articles || pendingX4Articles.length === 0) return;
+
+  const requestId = ++x4RegenRequestId;
+  const prevBlob = pendingX4Blob;
+  const prevSizeText = pendingX4SizeText;
+
+  x4RegenInFlight = true;
+  setX4ActionButtonsEnabled(false);
+  sizeEl.textContent = 'Regenerating...';
+  statusEl.textContent = 'Regenerating EPUB...';
+  statusEl.classList.remove('success', 'error');
+
+  try {
+    const blob = await buildMergedEPUBBlob(pendingX4Articles, {
+      includeImages: !x4ExcludeImagesSession
+    });
+
+    if (requestId !== x4RegenRequestId || !modal.classList.contains('open')) return;
+
+    pendingX4Blob = blob;
+    pendingX4SizeText = formatFileSize(blob.size);
+    sizeEl.textContent = pendingX4SizeText;
+    statusEl.textContent = 'Connection not checked.';
+    statusEl.classList.remove('success', 'error');
+  } catch (error) {
+    if (requestId !== x4RegenRequestId || !modal.classList.contains('open')) return;
+
+    // Keep previous valid blob/size on regeneration failures
+    pendingX4Blob = prevBlob;
+    pendingX4SizeText = prevSizeText;
+    sizeEl.textContent = pendingX4SizeText;
+    statusEl.textContent = 'Connection not checked.';
+    statusEl.classList.remove('success', 'error');
+    showToast('Could not regenerate EPUB: ' + (error.message || 'Unknown error'), 'error');
+  } finally {
+    // Re-enable only when the latest regeneration settles
+    if (requestId === x4RegenRequestId) {
+      x4RegenInFlight = false;
+      x4LatestSettledRequestId = requestId;
+      if (modal.classList.contains('open')) {
+        setX4ActionButtonsEnabled(!!pendingX4Blob);
+      }
+    }
+  }
+}
+
+/**
+ * Download from Send to X4 modal
+ */
+function handleX4Download() {
+  if (x4RegenInFlight && x4LatestSettledRequestId !== x4RegenRequestId) {
+    showToast('EPUB is still regenerating. Please wait.', 'error', 2000);
+    return;
+  }
+
+  if (!pendingX4Blob) {
+    showToast('No EPUB prepared. Please generate again.', 'error');
+    return;
+  }
+
+  const fileName = getSanitizedEpubFileName(document.getElementById('x4EpubName').value);
+  downloadBlob(pendingX4Blob, fileName);
+  showToast('EPUB downloaded successfully ✓', 'success', 2500);
+}
+
+/**
+ * Check device connection for Send to X4
+ */
+async function handleCheckX4Connection() {
+  const statusEl = document.getElementById('x4ConnectionStatus');
+  const checkBtn = document.getElementById('x4CheckConnectionBtn');
+  const ip = document.getElementById('x4DeviceIp').value.trim();
+  const firmware = document.getElementById('x4FirmwareSelect').value;
+
+  try {
+    checkBtn.disabled = true;
+    statusEl.textContent = 'Checking connection...';
+    statusEl.classList.remove('success', 'error');
+
+    const result = await checkX4Connection(ip, firmware);
+    if (result.ok) {
+      statusEl.textContent = `Connected: ${result.message}`;
+      statusEl.classList.add('success');
+      statusEl.classList.remove('error');
+      await saveX4Settings({ ip, firmware });
+    } else {
+      throw new Error(result.message || 'Device is not reachable');
+    }
+  } catch (error) {
+    statusEl.textContent = `Not connected: ${error.message}`;
+    statusEl.classList.add('error');
+    statusEl.classList.remove('success');
+  } finally {
+    checkBtn.disabled = false;
+  }
+}
+
+/**
+ * Send prepared EPUB to X4 device
+ */
+async function handleSendToX4() {
+  const sendBtn = document.getElementById('x4SendBtn');
+  const statusEl = document.getElementById('x4ConnectionStatus');
+  const responsePreviewEl = document.getElementById('x4ResponsePreview');
+  const ip = document.getElementById('x4DeviceIp').value.trim();
+  const firmware = document.getElementById('x4FirmwareSelect').value;
+  const fileName = getSanitizedEpubFileName(document.getElementById('x4EpubName').value);
+
+  if (x4RegenInFlight && x4LatestSettledRequestId !== x4RegenRequestId) {
+    showToast('EPUB is still regenerating. Please wait.', 'error', 2000);
+    return;
+  }
+
+  if (!pendingX4Blob) {
+    showToast('No EPUB prepared. Please generate again.', 'error');
+    return;
+  }
+
+  try {
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending...';
+
+    const response = await sendEpubToX4(pendingX4Blob, fileName, ip, firmware);
+
+    if (!response.ok) {
+      throw new Error(response.message || 'Upload failed');
+    }
+
+    await saveX4Settings({ ip, firmware });
+    statusEl.textContent = 'Upload successful ✓';
+    statusEl.classList.add('success');
+    statusEl.classList.remove('error');
+    responsePreviewEl.hidden = false;
+    responsePreviewEl.textContent = response.message || 'Upload successful';
+    showToast('EPUB sent to X4 successfully ✓', 'success', 3000);
+  } catch (error) {
+    console.error('X4 upload failed:', error);
+    statusEl.textContent = `Upload failed: ${error.message}`;
+    statusEl.classList.add('error');
+    statusEl.classList.remove('success');
+    responsePreviewEl.hidden = false;
+    responsePreviewEl.textContent = error.message || 'Upload failed';
+    showToast('Failed to send EPUB: ' + error.message, 'error');
+  } finally {
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send to X4';
+  }
+}
+
+/**
+ * Build base URL from user-entered IP/host
+ */
+function buildDeviceBaseUrl(input) {
+  const value = (input || '').trim();
+  if (!value) throw new Error('Please enter a device IP address');
+  if (/^https?:\/\//i.test(value)) {
+    return value.replace(/\/+$/, '');
+  }
+  return `http://${value.replace(/\/+$/, '')}`;
+}
+
+/**
+ * Check X4 connection (same method for stock + crosspoint for now)
+ */
+async function checkX4Connection(ip, firmware) {
+  const baseUrl = buildDeviceBaseUrl(ip);
+  const statusUrl = `${baseUrl}/api/status`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const statusRes = await fetch(statusUrl, { method: 'GET', signal: controller.signal });
+    if (statusRes.ok) {
+      return { ok: true, message: '/api/status reachable' };
+    }
+  } catch (_) {
+    // fallback below
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const homeController = new AbortController();
+  const homeTimer = setTimeout(() => homeController.abort(), 8000);
+  try {
+    const homeRes = await fetch(`${baseUrl}/`, { method: 'GET', signal: homeController.signal });
+    if (!homeRes.ok) {
+      return { ok: false, message: `HTTP ${homeRes.status} on /` };
+    }
+    const html = await homeRes.text();
+    if (/CrossPoint Reader|CrossPoint/i.test(html)) {
+      return { ok: true, message: 'CrossPoint home page detected' };
+    }
+    return { ok: true, message: 'Device responded on /' };
+  } finally {
+    clearTimeout(homeTimer);
+  }
+}
+
+/**
+ * Send EPUB blob to X4 upload endpoint (same method for stock + crosspoint)
+ */
+async function sendEpubToX4(blob, fileName, ip, firmware) {
+  const baseUrl = buildDeviceBaseUrl(ip);
+  const formData = new FormData();
+  formData.append('file', blob, fileName);
+
+  const bytes = Number(blob?.size) || 0;
+  const sizeMB = bytes / (1024 * 1024);
+  // Adaptive timeout: 20s base + 7s per MB, clamped to 45s..15min
+  const timeoutMs = Math.min(
+    15 * 60 * 1000,
+    Math.max(45 * 1000, Math.round((20 + sizeMB * 7) * 1000))
+  );
+
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    const res = await fetch(`${baseUrl}/upload`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal
+    });
+
+    const bodyText = await res.text().catch(() => '');
+    if (!res.ok) {
+      return { ok: false, message: `HTTP ${res.status}: ${bodyText || res.statusText}` };
+    }
+    return { ok: true, message: bodyText || 'Upload successful' };
+  } catch (error) {
+    if (timedOut || error?.name === 'AbortError') {
+      return {
+        ok: false,
+        message: `Upload timed out after ${Math.ceil(timeoutMs / 1000)}s (${formatFileSize(bytes)}). Please retry while keeping the device awake and on the same Wi-Fi.`
+      };
+    }
+
+    return {
+      ok: false,
+      message: error?.message || 'Network error while uploading'
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Load persisted X4 settings
+ */
+async function loadX4Settings() {
+  try {
+    const result = await chrome.storage.sync.get(X4_SETTINGS_KEY);
+    return result[X4_SETTINGS_KEY] || { firmware: 'crosspoint', ip: X4_DEFAULT_IP };
+  } catch (_) {
+    return { firmware: 'crosspoint', ip: X4_DEFAULT_IP };
+  }
+}
+
+/**
+ * Save persisted X4 settings
+ */
+async function saveX4Settings(settings) {
+  try {
+    await chrome.storage.sync.set({ [X4_SETTINGS_KEY]: settings });
+  } catch (_) {
+    // non-fatal
+  }
+}
+
+/**
+ * Ensure a safe .epub file name
+ */
+function getSanitizedEpubFileName(inputName) {
+  let fileName = (inputName || '').trim() || pendingX4DefaultName || `ReadEasy_Merged_${new Date().toISOString().split('T')[0]}.epub`;
+  fileName = fileName.replace(/[\\/:*?"<>|]/g, '_');
+  if (!/\.epub$/i.test(fileName)) fileName += '.epub';
+  return fileName;
+}
+
+/**
+ * Human-readable bytes
+ */
+function formatFileSize(bytes) {
+  if (!bytes || bytes < 1024) return `${bytes || 0} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let size = bytes / 1024;
+  let idx = 0;
+  while (size >= 1024 && idx < units.length - 1) {
+    size /= 1024;
+    idx++;
+  }
+  return `${size.toFixed(2)} ${units[idx]}`;
+}
+
+/**
+ * Download a Blob as file
+ */
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Build merged EPUB blob from all saved articles
+ * @param {Array} articles - Array of article objects from IndexedDB
+ * @param {Object} [options]
+ * @param {boolean} [options.includeImages=true]
+ * @returns {Promise<Blob>}
+ */
+async function buildMergedEPUBBlob(articles, options = {}) {
+  const includeImages = options.includeImages !== false;
   const zip = new JSZip();
   const chapters = [];
   // contentKey → { name, mimeType, base64 }
@@ -527,62 +1109,68 @@ async function generateMergedEPUB(articles) {
   for (const article of articles) {
     let htmlContent = article.htmlContent || '';
 
-    // ── Extract data: URLs directly from the raw HTML string ─────────────────
-    // Bypasses any DOM round-trip (innerHTML parse+serialize can corrupt large
-    // base64 attribute values via img.src URL resolution or serializer quirks).
-    //
-    // Matches:  src="data:image/png;base64,<base64data>"
-    //           (double-quoted; browsers always produce double-quoted via innerHTML)
-    const dataUrlRegex = /src="(data:([\w+\-]+\/[\w+\-]+);base64,([^"]+))"/g;
-    let match;
+    if (includeImages) {
+      // ── Extract data: URLs directly from the raw HTML string ─────────────────
+      // Bypasses any DOM round-trip (innerHTML parse+serialize can corrupt large
+      // base64 attribute values via img.src URL resolution or serializer quirks).
+      //
+      // Matches:  src="data:image/png;base64,<base64data>"
+      //           (double-quoted; browsers always produce double-quoted via innerHTML)
+      const dataUrlRegex = /src="(data:([\w+\-]+\/[\w+\-]+);base64,([^"]+))"/g;
+      let match;
 
-    // Map exact data: URL string → assigned image filename (for this article)
-    const urlToName = new Map();
+      // Map exact data: URL string → assigned image filename (for this article)
+      const urlToName = new Map();
 
-    while ((match = dataUrlRegex.exec(htmlContent)) !== null) {
-      const fullDataUrl = match[1]; // data:image/png;base64,...
-      const mimeType   = match[2]; // image/png
-      const base64Raw  = match[3]; // base64 chars (may have whitespace from FileReader)
+      while ((match = dataUrlRegex.exec(htmlContent)) !== null) {
+        const fullDataUrl = match[1]; // data:image/png;base64,...
+        const mimeType   = match[2]; // image/png
+        const base64Raw  = match[3]; // base64 chars (may have whitespace from FileReader)
 
-      if (urlToName.has(fullDataUrl)) continue; // same URL already mapped
+        if (urlToName.has(fullDataUrl)) continue; // same URL already mapped
 
-      // Strip whitespace — FileReader and some canvases insert \n every 76 chars
-      const cleanBase64 = base64Raw.replace(/\s/g, '');
+        // Strip whitespace — FileReader and some canvases insert \n every 76 chars
+        const cleanBase64 = base64Raw.replace(/\s/g, '');
 
-      // Validate: length-without-padding mod 4 must not be 1
-      const unpadded = cleanBase64.replace(/=+$/, '');
-      if (unpadded.length % 4 === 1) {
-        console.warn('[EPUB] Skipping image with invalid base64 length:', unpadded.length, mimeType);
-        continue;
+        // Validate: length-without-padding mod 4 must not be 1
+        const unpadded = cleanBase64.replace(/=+$/, '');
+        if (unpadded.length % 4 === 1) {
+          console.warn('[EPUB] Skipping image with invalid base64 length:', unpadded.length, mimeType);
+          continue;
+        }
+
+        // Deduplication fingerprint: total length + samples from start, middle, end.
+        // Using only the first N chars causes false matches on images that share the
+        // same encoder headers (e.g. all PNGs from the same CDN start identically).
+        const len = cleanBase64.length;
+        const mid = Math.floor(len / 2);
+        const contentKey = `${mimeType}|${len}|${cleanBase64.slice(0, 64)}|${cleanBase64.slice(mid, mid + 64)}|${cleanBase64.slice(-64)}`;
+
+        let imageName;
+        if (masterImageMap.has(contentKey)) {
+          imageName = masterImageMap.get(contentKey).name;
+        } else {
+          const ext = (mimeType.split('/')[1] || 'png').split('+')[0];
+          imageName = `image_${imageCounter}.${ext}`;
+          masterImageMap.set(contentKey, { name: imageName, mimeType, base64: cleanBase64 });
+          imageCounter++;
+        }
+
+        urlToName.set(fullDataUrl, imageName);
       }
 
-      // Deduplication fingerprint: total length + samples from start, middle, end.
-      // Using only the first N chars causes false matches on images that share the
-      // same encoder headers (e.g. all PNGs from the same CDN start identically).
-      const len = cleanBase64.length;
-      const mid = Math.floor(len / 2);
-      const contentKey = `${mimeType}|${len}|${cleanBase64.slice(0, 64)}|${cleanBase64.slice(mid, mid + 64)}|${cleanBase64.slice(-64)}`;
-
-      let imageName;
-      if (masterImageMap.has(contentKey)) {
-        imageName = masterImageMap.get(contentKey).name;
-      } else {
-        const ext = (mimeType.split('/')[1] || 'png').split('+')[0];
-        imageName = `image_${imageCounter}.${ext}`;
-        masterImageMap.set(contentKey, { name: imageName, mimeType, base64: cleanBase64 });
-        imageCounter++;
+      // ── Replace data: URLs with EPUB-relative paths ───────────────────────────
+      // Use split+join (literal string replacement) — never use RegExp on base64
+      // because base64 contains +, /, = which are RegExp special characters.
+      for (const [dataUrl, imageName] of urlToName) {
+        htmlContent = htmlContent
+          .split(`src="${dataUrl}"`)
+          .join(`src="images/${imageName}"`);
       }
-
-      urlToName.set(fullDataUrl, imageName);
-    }
-
-    // ── Replace data: URLs with EPUB-relative paths ───────────────────────────
-    // Use split+join (literal string replacement) — never use RegExp on base64
-    // because base64 contains +, /, = which are RegExp special characters.
-    for (const [dataUrl, imageName] of urlToName) {
-      htmlContent = htmlContent
-        .split(`src="${dataUrl}"`)
-        .join(`src="images/${imageName}"`);
+    } else {
+      // Build image-free chapter content for smaller X4 transfers
+      htmlContent = htmlContent.replace(/<picture[^>]*>[\s\S]*?<\/picture>/gi, '');
+      htmlContent = htmlContent.replace(/<img\b[^>]*>/gi, '');
     }
 
     chapters.push({
@@ -641,16 +1229,18 @@ async function generateMergedEPUB(articles) {
     zip.file(`OEBPS/images/${imageData.name}`, imageData.base64, { base64: true });
   }
 
-  // Generate blob and trigger download
-  const blob = await zip.generateAsync({ type: 'blob' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `ReadEasy_Merged_${new Date().toISOString().split('T')[0]}.epub`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Generate blob
+  return await zip.generateAsync({ type: 'blob' });
+}
+
+/**
+ * Generate merged EPUB and download (existing behavior)
+ * @param {Array} articles - Array of article objects from IndexedDB
+ */
+async function generateMergedEPUB(articles) {
+  const blob = await buildMergedEPUBBlob(articles);
+  const fileName = `ReadEasy_Merged_${new Date().toISOString().split('T')[0]}.epub`;
+  downloadBlob(blob, fileName);
 }
 
 /**

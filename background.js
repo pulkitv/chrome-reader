@@ -49,6 +49,31 @@ async function deleteArticle(id) {
   });
 }
 
+async function updateArticleTitle(id, title) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const getRequest = store.get(id);
+
+    getRequest.onsuccess = () => {
+      const article = getRequest.result;
+      if (!article) {
+        reject(new Error('Article not found'));
+        return;
+      }
+
+      article.title = title;
+      const putRequest = store.put(article);
+      putRequest.onsuccess = () => resolve();
+      putRequest.onerror = () => reject(putRequest.error);
+    };
+
+    getRequest.onerror = () => reject(getRequest.error);
+    transaction.oncomplete = () => db.close();
+  });
+}
+
 async function getArticleCount() {
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -168,6 +193,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Sidepanel might not be open, ignore error
         });
         
+        sendResponse({ success: true });
+      }
+      else if (message.action === 'updateArticleTitle') {
+        const id = Number(message.id);
+        const newTitle = (message.title || '').trim();
+
+        if (!Number.isFinite(id)) {
+          throw new Error('Invalid article id');
+        }
+
+        if (!newTitle) {
+          throw new Error('Title cannot be empty');
+        }
+
+        // Update title in IndexedDB (used by merged EPUB generation)
+        await updateArticleTitle(id, newTitle);
+
+        // Update title in metadata (used by sidepanel list UI)
+        const { readingListMeta = [] } = await chrome.storage.local.get('readingListMeta');
+        const updatedMeta = readingListMeta.map(item =>
+          item.id === id ? { ...item, title: newTitle } : item
+        );
+        await chrome.storage.local.set({ readingListMeta: updatedMeta });
+
+        // Broadcast update to sidepanel
+        chrome.runtime.sendMessage({ action: 'listUpdated' }).catch(() => {
+          // Sidepanel might not be open, ignore error
+        });
+
         sendResponse({ success: true });
       }
       else {

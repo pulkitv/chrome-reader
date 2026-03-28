@@ -127,6 +127,38 @@ async function deleteArticle(id) {
 }
 
 /**
+ * Update article title by ID
+ * @param {number} id - Article ID
+ * @param {string} title - New article title
+ * @returns {Promise<void>}
+ */
+async function updateArticleTitle(id, title) {
+  const db = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const getRequest = store.get(id);
+
+    getRequest.onsuccess = () => {
+      const article = getRequest.result;
+      if (!article) {
+        reject(new Error('Article not found'));
+        return;
+      }
+
+      article.title = title;
+      const putRequest = store.put(article);
+      putRequest.onsuccess = () => resolve();
+      putRequest.onerror = () => reject(putRequest.error);
+    };
+
+    getRequest.onerror = () => reject(getRequest.error);
+    transaction.oncomplete = () => db.close();
+  });
+}
+
+/**
  * Get count of saved articles
  * @returns {Promise<number>}
  */
