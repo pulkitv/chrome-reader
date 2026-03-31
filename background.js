@@ -195,6 +195,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         sendResponse({ success: true });
       }
+      else if (message.action === 'openSidePanel') {
+        // Open the side panel for the sender's tab
+        const windowId = sender.tab ? sender.tab.windowId : undefined;
+        if (windowId) {
+          await chrome.sidePanel.open({ windowId });
+        }
+        sendResponse({ success: true });
+      }
       else if (message.action === 'updateArticleTitle') {
         const id = Number(message.id);
         const newTitle = (message.title || '').trim();
