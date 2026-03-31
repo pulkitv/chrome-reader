@@ -88,8 +88,9 @@
   function updateMarkerPosition(range) {
     if (!marker) return;
     const rect = range.getBoundingClientRect();
-    marker.style.top = `${rect.top + window.scrollY - 25}px`;
-    marker.style.left = `${rect.right + window.scrollX - 25}px`;
+    // Use viewport-relative coords directly (position:fixed)
+    marker.style.top = `${rect.top - 25}px`;
+    marker.style.left = `${rect.right - 25}px`;
   }
 
   function showMarker(range) {
@@ -106,7 +107,7 @@
         <line x1="36" y1="78" x2="92" y2="78" stroke="white" stroke-width="2" opacity="0.6"/>
       </g>
     </svg>`;
-    marker.style.cssText = 'position:absolute;z-index:10000;cursor:pointer;background:rgba(255,255,255,0.9);border:1px solid #ccc;border-radius:4px;padding:2px;line-height:0;';
+    marker.style.cssText = 'position:fixed;z-index:2147483647;cursor:pointer;background:rgba(255,255,255,0.9);border:1px solid #ccc;border-radius:4px;padding:2px;line-height:0;';
     updateMarkerPosition(range);
 
     // Clone range so it survives even if the live selection changes
@@ -146,7 +147,7 @@
     }
   }
 
-  // --- Event listeners ---
+  // --- Event listeners (capture phase for SPA compatibility) ---
 
   // Track mouse-down so we know user is actively selecting
   document.addEventListener('mousedown', (e) => {
@@ -154,7 +155,7 @@
     if (marker && marker.contains(e.target)) return;
     isMouseDown = true;
     hideMarker();
-  });
+  }, true);
 
   // On mouse-up, wait a tick for the browser to finalise the selection, then show marker
   document.addEventListener('mouseup', () => {
@@ -174,7 +175,7 @@
       }
       hideMarker();
     }, 10);
-  });
+  }, true);
 
   // Hide marker when selection is cleared programmatically (Ctrl+A → delete, Escape, etc.)
   document.addEventListener('selectionchange', () => {
@@ -185,12 +186,12 @@
     }
   });
 
-  // Keep marker anchored to the selected text during scroll
+  // Keep marker anchored to the selected text during scroll (capture for nested scroll containers)
   document.addEventListener('scroll', () => {
     if (!marker) return;
     const selection = window.getSelection();
     if (selection.rangeCount > 0 && !selection.isCollapsed) {
       updateMarkerPosition(selection.getRangeAt(0));
     }
-  });
+  }, true);
 })();
