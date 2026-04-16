@@ -17,14 +17,18 @@ let x4ExcludeImagesSession = false;
 let x4RegenRequestId = 0;
 let x4LatestSettledRequestId = 0;
 let x4RegenInFlight = false;
+let floaterEnabled = true;
 
 const X4_DEFAULT_IP = '192.168.1.11';
 const X4_SETTINGS_KEY = 'x4Settings';
+const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('[SidePanel] DOMContentLoaded - JS loaded');
   await initPanel();
+  await loadFloaterSetting();
+  applyFloaterSettingUI();
   setupEventListeners();
   await checkCurrentTab();
 });
@@ -63,6 +67,39 @@ async function initPanel() {
  */
 function setupEventListeners() {
   console.log('[SidePanel] setupEventListeners called');
+  const headerMenuBtn = document.getElementById('headerMenuBtn');
+  const openSettingsBtn = document.getElementById('openSettingsBtn');
+  const settingsBackBtn = document.getElementById('settingsBackBtn');
+  const floaterEnabledSelect = document.getElementById('floaterEnabledSelect');
+
+  headerMenuBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const dropdown = document.getElementById('headerMenuDropdown');
+    toggleHeaderMenu(dropdown.hasAttribute('hidden'));
+  });
+
+  openSettingsBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openSettingsPage();
+  });
+
+  settingsBackBtn.addEventListener('click', () => {
+    closeSettingsPage();
+  });
+
+  floaterEnabledSelect.addEventListener('change', async (e) => {
+    floaterEnabled = e.target.value === 'enabled';
+    try {
+      await chrome.storage.sync.set({ [FLOATING_BUTTON_ENABLED_KEY]: floaterEnabled });
+      applyFloaterSettingUI();
+    } catch (err) {
+      console.error('[SidePanel] Failed to save floater setting:', err);
+      showToast('Failed to save settings', 'error');
+    }
+  });
+
   // Add to list button — delegates to reader tab or extracts from regular tab
   document.getElementById('addToListBtn').addEventListener('click', async () => {
     if (currentReaderTabId) {
@@ -114,8 +151,18 @@ function setupEventListeners() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      toggleHeaderMenu(false);
       const modal = document.getElementById('x4Modal');
       if (modal.classList.contains('open')) closeX4Modal();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('headerMenuDropdown');
+    const btn = document.getElementById('headerMenuBtn');
+    if (dropdown.hasAttribute('hidden')) return;
+    if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+      toggleHeaderMenu(false);
     }
   });
   
@@ -144,6 +191,60 @@ function setupEventListeners() {
       checkCurrentTab();
     }
   });
+}
+
+async function loadFloaterSetting() {
+  try {
+    const data = await chrome.storage.sync.get(FLOATING_BUTTON_ENABLED_KEY);
+    const value = data ? data[FLOATING_BUTTON_ENABLED_KEY] : undefined;
+
+    if (typeof value === 'boolean') {
+      floaterEnabled = value;
+      return;
+    }
+
+    floaterEnabled = true;
+    await chrome.storage.sync.set({ [FLOATING_BUTTON_ENABLED_KEY]: true });
+  } catch (err) {
+    console.warn('[SidePanel] Failed to load floater setting, defaulting to enabled:', err);
+    floaterEnabled = true;
+  }
+}
+
+function applyFloaterSettingUI() {
+  const select = document.getElementById('floaterEnabledSelect');
+  if (!select) return;
+  select.value = floaterEnabled ? 'enabled' : 'disabled';
+}
+
+function openSettingsPage() {
+  const mainPage = document.getElementById('mainPage');
+  const settingsPage = document.getElementById('settingsPage');
+  mainPage.style.display = 'none';
+  settingsPage.style.display = 'flex';
+  toggleHeaderMenu(false);
+  applyFloaterSettingUI();
+}
+
+function closeSettingsPage() {
+  const mainPage = document.getElementById('mainPage');
+  const settingsPage = document.getElementById('settingsPage');
+  settingsPage.style.display = 'none';
+  mainPage.style.display = 'flex';
+}
+
+function toggleHeaderMenu(show) {
+  const dropdown = document.getElementById('headerMenuDropdown');
+  const btn = document.getElementById('headerMenuBtn');
+  if (!dropdown || !btn) return;
+
+  if (show) {
+    dropdown.removeAttribute('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+  } else {
+    dropdown.setAttribute('hidden', '');
+    btn.setAttribute('aria-expanded', 'false');
+  }
 }
 
 /**

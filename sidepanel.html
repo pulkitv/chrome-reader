@@ -9,72 +9,102 @@
 <body class="light-theme">
   <!-- Header with storage info -->
   <header class="panel-header">
-    <h1>Reading List</h1>
+    <div class="panel-header-top">
+      <h1>Reading List</h1>
+      <div class="header-actions">
+        <button id="headerMenuBtn" class="icon-btn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false" type="button">
+          <span aria-hidden="true">⋯</span>
+        </button>
+        <div id="headerMenuDropdown" class="header-menu-dropdown" hidden>
+          <button id="openSettingsBtn" class="header-menu-item" type="button">Settings</button>
+        </div>
+      </div>
+    </div>
     <div id="storageInfo" class="storage-info">0/10 articles • 0MB</div>
   </header>
 
-  <!-- Save Selection — always visible when on a regular webpage -->
-  <div id="saveSelectionSection" class="save-selection-section" style="display:none;">
-    <button id="saveSelectionBtn" class="btn-selection">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2 2h12v12H2z" stroke="currentColor" stroke-width="1.5" fill="none" rx="2"/>
-        <path d="M5 5h6M5 8h6M5 11h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      </svg>
-      <span>Save Selection</span>
-    </button>
-  </div>
-
-  <!-- Current article section (shown when on reader page) -->
-  <div id="currentArticleSection" class="current-article-section" style="display: block;">
-    <div class="section-label">Current Article</div>
-    <div class="article-card current">
-      <button id="addToListBtn" class="btn-add-mini" aria-label="Add to List" title="Add to List">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-          <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <div id="mainPage">
+    <!-- Save Selection — always visible when on a regular webpage -->
+    <div id="saveSelectionSection" class="save-selection-section" style="display:none;">
+      <button id="saveSelectionBtn" class="btn-selection">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2 2h12v12H2z" stroke="currentColor" stroke-width="1.5" fill="none" rx="2"/>
+          <path d="M5 5h6M5 8h6M5 11h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-        <span class="sr-only">Add to List</span>
+        <span>Save Selection</span>
       </button>
-      <div class="article-title" id="currentTitle">No article detected yet</div>
-      <div class="article-meta" id="currentDomain">Open an article page to extract</div>
     </div>
-  </div>
 
-  <!-- Saved articles list -->
-  <div class="list-section">
-    <div class="section-label">Saved Articles</div>
-    <div id="articleList" class="article-list">
-      <!-- Articles will be rendered here -->
-      <div class="empty-state">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 8H36V40H12V8Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M18 16H30M18 24H30M18 32H24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        <p>No articles saved yet</p>
-        <small>Click "Add to List" from any reader view to save articles</small>
+    <!-- Current article section (shown when on reader page) -->
+    <div id="currentArticleSection" class="current-article-section" style="display: block;">
+      <div class="section-label">Current Article</div>
+      <div class="article-card current">
+        <button id="addToListBtn" class="btn-add-mini" aria-label="Add to List" title="Add to List">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span class="sr-only">Add to List</span>
+        </button>
+        <div class="article-title" id="currentTitle">No article detected yet</div>
+        <div class="article-meta" id="currentDomain">Open an article page to extract</div>
       </div>
     </div>
+
+    <!-- Saved articles list -->
+    <div class="list-section">
+      <div class="section-label">Saved Articles</div>
+      <div id="articleList" class="article-list">
+        <!-- Articles will be rendered here -->
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 8H36V40H12V8Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M18 16H30M18 24H30M18 32H24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <p>No articles saved yet</p>
+          <small>Click "Add to List" from any reader view to save articles</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer with merge actions -->
+    <footer class="panel-footer">
+      <div class="footer-actions">
+        <button id="mergeEpubBtn" class="btn-secondary" disabled>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 12V4M8 4L5 7M8 4L11 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 14H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span>Merge & Download EPUB</span>
+        </button>
+
+        <button id="mergeSendX4Btn" class="btn-x4" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Merge & Send to X4</span>
+        </button>
+      </div>
+    </footer>
   </div>
 
-  <!-- Footer with merge actions -->
-  <footer class="panel-footer">
-    <div class="footer-actions">
-      <button id="mergeEpubBtn" class="btn-secondary" disabled>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M8 12V4M8 4L5 7M8 4L11 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M3 14H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        <span>Merge & Download EPUB</span>
-      </button>
-
-      <button id="mergeSendX4Btn" class="btn-x4" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>Merge & Send to X4</span>
-      </button>
+  <div id="settingsPage" class="settings-page" style="display:none;">
+    <div class="settings-header-row">
+      <button id="settingsBackBtn" class="btn-outline" type="button" aria-label="Back to main page">← Back</button>
+      <div class="settings-title">Settings</div>
     </div>
-  </footer>
+
+    <div class="settings-card">
+      <div class="settings-row">
+        <label for="floaterEnabledSelect" class="settings-label">ReadEasy Floater</label>
+        <select id="floaterEnabledSelect" class="settings-select">
+          <option value="enabled">enabled</option>
+          <option value="disabled">disabled</option>
+        </select>
+      </div>
+      <small class="settings-help">enabled = floater shown, disabled = floater hidden</small>
+    </div>
+  </div>
 
   <!-- Merge & Send to X4 modal -->
   <div id="x4Modal" class="x4-modal" aria-hidden="true">

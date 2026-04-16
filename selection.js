@@ -7,6 +7,199 @@
 (function() {
   'use strict';
 
+  const FLOATING_BTN_POS_KEY = 'floatingButtonPosition';
+  const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
+  const DEFAULT_OFFSET = 20;
+  let floatingBtn = null;
+  let floatingButtonEnabled = true;
+  let hasResizeListener = false;
+  let isDragging = false;
+  let dragStarted = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let startLeft = 0;
+  let startTop = 0;
+
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function getViewportBoundedPosition(left, top, width, height) {
+    const maxLeft = Math.max(0, window.innerWidth - width - 8);
+    const maxTop = Math.max(0, window.innerHeight - height - 8);
+    return {
+      left: clamp(left, 8, maxLeft),
+      top: clamp(top, 8, maxTop)
+    };
+  }
+
+  function positionFloatingButton(left, top) {
+    if (!floatingBtn) return;
+    const rect = floatingBtn.getBoundingClientRect();
+    const bounded = getViewportBoundedPosition(left, top, rect.width || 48, rect.height || 48);
+    floatingBtn.style.left = `${bounded.left}px`;
+    floatingBtn.style.top = `${bounded.top}px`;
+    floatingBtn.style.right = 'auto';
+    floatingBtn.style.bottom = 'auto';
+  }
+
+  function handleFloatingButtonResize() {
+    if (!floatingBtn) return;
+    const rect = floatingBtn.getBoundingClientRect();
+    positionFloatingButton(rect.left, rect.top);
+  }
+
+  function removeFloatingButton() {
+    if (!floatingBtn) return;
+    floatingBtn.remove();
+    floatingBtn = null;
+    isDragging = false;
+    dragStarted = false;
+  }
+
+  async function loadFloatingButtonEnabledSetting() {
+    try {
+      const data = await chrome.storage.sync.get(FLOATING_BUTTON_ENABLED_KEY);
+      const value = data && data[FLOATING_BUTTON_ENABLED_KEY];
+      if (typeof value === 'boolean') {
+        floatingButtonEnabled = value;
+      } else {
+        floatingButtonEnabled = true;
+        await chrome.storage.sync.set({ [FLOATING_BUTTON_ENABLED_KEY]: true });
+      }
+    } catch (err) {
+      console.warn('[ReadEasy Floating Button] Failed to load enabled setting:', err);
+      floatingButtonEnabled = true;
+    }
+  }
+
+  async function updateFloatingButtonVisibility() {
+    if (floatingButtonEnabled) {
+      await renderFloatingButton();
+    } else {
+      removeFloatingButton();
+    }
+  }
+
+  async function saveFloatingButtonPosition(left, top) {
+    try {
+      await chrome.storage.sync.set({
+        [FLOATING_BTN_POS_KEY]: { left, top }
+      });
+    } catch (err) {
+      console.warn('[ReadEasy Floating Button] Failed to save position:', err);
+    }
+  }
+
+  function handleDragMove(e) {
+    if (!isDragging || !floatingBtn) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      dragStarted = true;
+    }
+    positionFloatingButton(startLeft + dx, startTop + dy);
+  }
+
+  async function handleDragEnd() {
+    if (!isDragging || !floatingBtn) return;
+    isDragging = false;
+    document.removeEventListener('mousemove', handleDragMove, true);
+    document.removeEventListener('mouseup', handleDragEnd, true);
+    const rect = floatingBtn.getBoundingClientRect();
+    await saveFloatingButtonPosition(rect.left, rect.top);
+  }
+
+  function attachFloatingButtonDrag() {
+    if (!floatingBtn) return;
+    floatingBtn.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = floatingBtn.getBoundingClientRect();
+      isDragging = true;
+      dragStarted = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      startLeft = rect.left;
+      startTop = rect.top;
+      document.addEventListener('mousemove', handleDragMove, true);
+      document.addEventListener('mouseup', handleDragEnd, true);
+    }, true);
+
+    floatingBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (dragStarted) {
+        dragStarted = false;
+        return;
+      }
+      chrome.runtime.sendMessage({ action: 'openSidePanel' }).catch((err) => {
+        console.warn('[ReadEasy Floating Button] Failed to open side panel:', err);
+      });
+    }, true);
+  }
+
+  async function renderFloatingButton() {
+    if (floatingBtn || !document.body || !floatingButtonEnabled) return;
+
+    floatingBtn = document.createElement('button');
+    floatingBtn.type = 'button';
+    floatingBtn.setAttribute('aria-label', 'Open ReadEasy side panel');
+    floatingBtn.title = 'Open ReadEasy';
+    floatingBtn.style.cssText = [
+      'position:fixed',
+      `left:${DEFAULT_OFFSET}px`,
+      `bottom:${DEFAULT_OFFSET}px`,
+      'width:48px',
+      'height:48px',
+      'border:none',
+      'border-radius:999px',
+      'padding:0',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+      'cursor:grab',
+      'background:#ffffff',
+      'box-shadow:0 8px 20px rgba(0,0,0,0.25)',
+      'z-index:2147483647'
+    ].join(';');
+
+    const icon = document.createElement('img');
+    icon.src = chrome.runtime.getURL('icons/icon48.png');
+    icon.alt = 'ReadEasy';
+    icon.style.width = '42px';
+    icon.style.height = '42px';
+    icon.style.objectFit = 'contain';
+    icon.style.borderRadius = '50%';
+    icon.style.pointerEvents = 'none';
+    icon.addEventListener('error', () => {
+      floatingBtn.textContent = 'R';
+      floatingBtn.style.fontWeight = '700';
+      floatingBtn.style.fontSize = '18px';
+      floatingBtn.style.color = '#1f4ed8';
+    });
+    floatingBtn.appendChild(icon);
+
+    document.body.appendChild(floatingBtn);
+    attachFloatingButtonDrag();
+
+    try {
+      const data = await chrome.storage.sync.get(FLOATING_BTN_POS_KEY);
+      const saved = data && data[FLOATING_BTN_POS_KEY];
+      if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+        positionFloatingButton(saved.left, saved.top);
+      }
+    } catch (err) {
+      console.warn('[ReadEasy Floating Button] Failed to load saved position:', err);
+    }
+
+    if (!hasResizeListener) {
+      window.addEventListener('resize', handleFloatingButtonResize);
+      hasResizeListener = true;
+    }
+  }
+
   // --- Image embedding (same as reader.js / sidepanel.js) ---
 
   async function fetchImageAsPng(url) {
@@ -113,4 +306,23 @@
 
     return true; // keep message channel open for async response
   });
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'sync' || !changes[FLOATING_BUTTON_ENABLED_KEY]) return;
+
+    const nextValue = changes[FLOATING_BUTTON_ENABLED_KEY].newValue;
+    if (typeof nextValue === 'boolean') {
+      floatingButtonEnabled = nextValue;
+    } else {
+      floatingButtonEnabled = true;
+      chrome.storage.sync.set({ [FLOATING_BUTTON_ENABLED_KEY]: true }).catch(() => {});
+    }
+
+    updateFloatingButtonVisibility();
+  });
+
+  (async () => {
+    await loadFloatingButtonEnabledSetting();
+    await updateFloatingButtonVisibility();
+  })();
 })();

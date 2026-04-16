@@ -1,8 +1,152 @@
 # ReadEasy Extension — Project Architecture & Development Guide
 
+> ## April 17, 2026 — Canonical Agent Handoff Update (Read This First)
+>
+> This section supersedes older historical notes below and is intended for new CLI agents (for example, Anti-Gravity-like workflows) that need a reliable chronological understanding of what has already been implemented.
+
+### Current Architecture Snapshot (as of latest local April 17 state)
+
+1. **Core extraction path remains unchanged**
+  - `background.js` injects `libs/Readability.js` + `content.js`
+  - Extracted article is stored in `chrome.storage.session.currentArticle`
+  - `reader.html` renders it via `reader.js`
+
+2. **Reading List remains two-layered**
+  - **IndexedDB (`savedArticles`)** stores full `htmlContent`
+  - **`chrome.storage.local.readingListMeta`** stores lightweight list metadata
+  - Background worker keeps these in sync on add/delete/title-update
+
+3. **Selection save architecture changed significantly (important)**
+  - Old behavior (floating on-page marker) was removed due intrusiveness
+  - New behavior: side-panel-driven save via **Save Selection** button
+  - `selection.js` now handles selection-save responses and the newer webpage floater
+  - Contract: sidepanel sends `getSelectedHTML`; content script returns selected fragment payload
+
+4. **Current side panel UX model**
+  - Dedicated top section: `#saveSelectionSection`
+  - Current article card still exists for page context
+  - Add action in card is now compact top-right plus button (`#addToListBtn`)
+  - Save Selection visibility is controlled independently from current-card reset logic
+
+5. **EPUB merge path remains central in sidepanel**
+  - `sidepanel.js` loads full articles from IndexedDB
+  - Generates merged EPUB with chapter files and image dedup strategy
+  - X4 modal flow still supported with image-included / image-excluded generation modes
+
+6. **Floating launcher architecture now exists on webpages**
+  - `selection.js` renders a draggable floating launcher on regular websites
+  - Launcher uses extension icon assets and opens the side panel on click
+  - Launcher position persists in synced storage via `floatingButtonPosition`
+
+7. **Side panel now includes a settings surface**
+  - Header has a 3-dot overflow menu
+  - Menu opens an in-panel Settings page
+  - Settings currently include `ReadEasy Floater` enable/disable control
+  - Control persists to `chrome.storage.sync.floatingButtonEnabled`
+  - Default state is enabled when key is missing
+
+---
+
+### Chronological Timeline (Accurate Through April 17, 2026)
+
+#### Phase A — Foundation
+- **`0375d98`**: Initial extension architecture established (reader, extraction, save paths, EPUB basis)
+
+#### Phase B — Image handling and robustness
+- **`061e3e3`**: Unified image pipeline (fetch + canvas PNG) across reader and sidepanel paths
+- Improved reliability for cross-origin image embedding
+
+#### Phase C — UI + privacy + tooling iterations
+- **`054e906`**, **`13085ca`**, **`0e4f11e`**: UI labels, privacy clarifications, release prep updates
+
+#### Phase D — X4 flow
+- **`85fbb49`**: Merge & Send to X4 workflow with modal, upload logic, and regeneration flow
+
+#### Phase E — Selection marker prototype + hardening
+- **`7d8d2ba`**: Introduced floating selection marker on webpages
+- **`71054e6`**: SPA compatibility hardening (marker behavior on React/SPA pages)
+
+#### Phase F — v1.0.4 metadata and docs
+- **`b893cfb`**: release metadata/privacy prep
+
+#### Phase G — Marker removal + sidepanel Save Selection migration
+- Marker UI removed from webpage
+- Selection save moved to sidepanel action button
+- `selection.js` repurposed to selection extraction responder (`getSelectedHTML`)
+
+#### Phase H — UX polish and state bug fixes
+- **`d454174`**: “Refine side panel save-selection UX and compact add button”
+  - Add-to-list converted into compact plus button in current card
+  - Save Selection made persistent at top section for regular webpage contexts
+  - Follow-up fix ensured Save Selection does not disappear after Add-to-List card state reset
+  - Visibility now driven by active tab type and dedicated visibility updater
+
+#### Phase I — Floating launcher + settings controls
+- Added draggable floating launcher on webpages
+- Launcher default position changed to left-bottom
+- Launcher icon loading fixed using web-accessible resource configuration
+- Added fallback launcher label if icon fails to load
+- Added sidepanel header menu with Settings entry
+- Added in-panel settings page with `ReadEasy Floater` toggle
+- Added live synced enable/disable behavior for launcher via `chrome.storage.onChanged`
+
+---
+
+### Current Message Contracts You Must Preserve
+
+1. **Sidepanel → selection content script**
+  - Request: `{ action: 'getSelectedHTML' }`
+  - Success response: `{ success: true, htmlContent, pageUrl, pageTitle }`
+  - Failure response: `{ success: false, error }`
+
+2. **Reader/Sidepanel → background**
+  - `{ action: 'saveToReadingList', article }`
+  - `{ action: 'deleteFromList', id }`
+  - `{ action: 'updateArticleTitle', id, title }`
+
+3. **Background broadcast**
+  - `{ action: 'listUpdated' }`
+
+4. **Synced floater settings contract**
+  - `chrome.storage.sync.floatingButtonEnabled`
+  - Missing value must be treated as `true` and self-healed to `true`
+  - `selection.js` must react live to changes so open pages update immediately
+
+---
+
+### Invariants for Future Agents
+
+1. Keep metadata (`readingListMeta`) and IndexedDB (`savedArticles`) consistent
+2. Keep multi-selection save support via unique URL hash suffix (`#highlight-<timestamp>`)
+3. Do not re-introduce intrusive on-page marker UX unless explicitly requested
+4. Keep Save Selection visibility independent from current-article card reset
+5. Keep floating launcher visibility governed by synced floater setting, not hardcoded render timing
+6. Preserve launcher position persistence independently of enabled/disabled state
+7. Validate flows across three tab classes:
+  - regular `http/https`
+  - `reader.html`
+  - unsupported/internal pages (`chrome://`, extension pages)
+
+---
+
+### Practical Verification Checklist (Current)
+
+- [ ] Add current page via plus button still works
+- [ ] Save Selection remains available on regular pages even after Add-to-List
+- [ ] Multiple sequential Save Selection operations from same page create distinct saved entries
+- [ ] Merged EPUB includes those selection entries
+- [ ] Sidepanel updates correctly on `listUpdated` + storage changes
+- [ ] Floating launcher appears by default on regular webpages
+- [ ] Floating launcher opens sidepanel and can be dragged
+- [ ] `ReadEasy Floater` setting hides/shows launcher immediately across open pages
+
+---
+
+> If there is any conflict between older sections below and this April 17 update, treat this update as canonical.
+
 > **Purpose**: Comprehensive reference for AI coding assistants and developers. Read this file first in any new chat — it describes every component, data flow, storage scheme, and key implementation decision in the current codebase.
 
-> **Last Updated**: March 28, 2026
+> **Last Updated**: April 17, 2026
 
 ---
 
@@ -31,6 +175,9 @@
 - Text-to-Speech (TTS) playback with line-sync Flash It
 - Web App Handoff — sends article HTML + CSS to an external web app via `postMessage`
 - **Reading List** — save up to 10 articles (with embedded images) to IndexedDB
+- **Save Selection** — sidepanel-driven selected-text capture from normal webpages
+- **Floating launcher** — draggable webpage entry point for opening the side panel
+- **Side panel settings** — in-panel overflow menu with synced floater preference
 - **Inline title editing** — pencil icon in side panel cards to rename saved articles
 - **Merged EPUB export** — combine all saved articles into a single, image-deduplicated EPUB
 - **Merge & Send to X4** — generate merged EPUB in side panel modal and upload to LAN device
@@ -43,7 +190,7 @@
 
 ## Architecture & Data Flow
 
-### Six-Component Pipeline
+### Seven-Component Pipeline
 
 ```
 User Click
@@ -59,21 +206,28 @@ User Click
     │  URL normalisation
     │  returns article object
     ▼
-[3] chrome.storage.session  (data bus)
+[3] selection.js  (declarative content script on webpages)
+  │  responds to getSelectedHTML
+  │  renders draggable floating launcher
+  │  persists launcher position / reacts to synced setting changes
+  ▼
+[4] chrome.storage.session  (data bus)
     │  holds currentArticle for reader tab
     ▼
-[4] reader.html / reader.js / reader.css
+[5] reader.html / reader.js / reader.css
     │  renders article
     │  Flash It, TTS, export
     │  "Add to List" button → fetchImageAsPng → saveToReadingList message
     ▼
-[5] IndexedDB + chrome.storage.local  (persistent store)
+[6] IndexedDB + chrome.storage.local  (persistent store)
     │  full HTML with base64 images in IndexedDB
     │  lightweight metadata array in chrome.storage.local
     ▼
-[6] sidepanel.html / sidepanel.js / sidepanel.css
+[7] sidepanel.html / sidepanel.js / sidepanel.css
     │  reading list display
+  │  Save Selection + compact current-article add button
   │  inline title edit (pencil icon + in-card input)
+  │  overflow menu + Settings page
     │  "Add to List" from regular tab → fetchImageAsPng → saveToReadingList
     │  Merge & Download EPUB
     │  Merge & Send to X4 modal (name/size/firmware/IP/check/upload)
@@ -99,6 +253,25 @@ User Click
 6. Same `fetchImageAsPng()` pipeline as above
 7. Sets `img.setAttribute('src', dataUrl)` directly on DOM elements, serialises once with `tempDiv.innerHTML`
 8. Sends `saveToReadingList` message to background.js (same path as above)
+
+### Message Flow: Save Selection from Regular Tab (sidepanel)
+
+1. `checkCurrentTab()` detects a normal `http/https` tab and shows `#saveSelectionSection`
+2. User highlights text on the page
+3. User clicks **Save Selection** in the side panel
+4. sidepanel sends `{ action: 'getSelectedHTML' }` to `selection.js` in the active tab
+5. `selection.js` returns `{ success, htmlContent, pageUrl, pageTitle }`
+6. sidepanel creates a synthetic article title and applies a unique `#highlight-<timestamp>` URL suffix
+7. sidepanel sends the final article payload through background `saveToReadingList`
+
+### Message Flow: Floating Launcher + Settings
+
+1. `selection.js` loads on regular webpages and reads synced floater settings
+2. If `floatingButtonEnabled !== false`, it renders a draggable launcher using `icons/icon48.png`
+3. Drag end persists `floatingButtonPosition` to `chrome.storage.sync`
+4. Launcher click sends an open-sidepanel request through extension messaging
+5. sidepanel Settings page updates `floatingButtonEnabled`
+6. `selection.js` listens to `chrome.storage.onChanged` so already-open tabs hide/show the launcher live
 
 ### Message Flow: "Add to List" from Reader Tab (sidepanel delegation)
 
@@ -137,11 +310,14 @@ User Click
 
 ```
 chrome-extension/
-├── manifest.json            MV3 config — permissions, side_panel, host_permissions, CSP
+├── manifest.json            MV3 config — permissions, side_panel, host_permissions,
+│                            content scripts, web-accessible resources, CSP
 ├── background.js            Service worker — toolbar click handler, IndexedDB helpers,
 │                            saveToReadingList / deleteFromList / updateArticleTitle handlers,
-│                            context menu
+│                            open-sidepanel request handling, context menu
 ├── content.js               Injected content script — Readability extraction, URL normalisation
+├── selection.js             Declarative content script — Save Selection responder,
+│                            floating launcher render/drag/open-sidepanel logic
 ├── db.js                    IndexedDB wrapper used by sidepanel.js — Promise-based CRUD,
 │                            includes title update helper
 │
@@ -151,106 +327,70 @@ chrome-extension/
 ├── reader.css               Reader view styles — theme variables, Flash It, Flash overlay,
 │                            progress bar, notification toasts
 │
-├── sidepanel.html           Side panel UI — reading list, current article section, storage info
+├── sidepanel.html           Side panel UI — Save Selection section, current article card,
+│                            reading list, overflow menu, Settings page, storage info
 ├── sidepanel.js             Side panel logic (~940 lines) — list render, add/remove,
-│                            inline title edit, EPUB merge/download, X4 modal flow,
+│                            Save Selection, compact add button, floater settings persistence,
 │                            guarded async regeneration, fetchImageAsPng, tab detection,
 │                            storage change listeners
-├── sidepanel.css            Side panel styles — card layout, inline editor, X4 modal,
-│                            toasts, themes
+├── sidepanel.css            Side panel styles — card layout, compact add button, menu,
+│                            settings page, inline editor, X4 modal, toasts, themes
 │
 ├── rules.json               declarativeNetRequest rules — sets Referer header for CDN images
 │                            (Substack, Medium). Add new rules here for blocked CDNs.
 │
 ├── libs/
-│   ├── Readability.js       Mozilla Readability (89 KB, don't modify)
+│   ├── Readability.js       Mozilla Readability library (do not modify)
 │   └── jszip.min.js         JSZip for EPUB generation (~100 KB)
 │
 ├── icons/
-│   ├── icon16.png / icon32.png / icon48.png / icon128.png
-│
-├── _metadata/               Auto-generated by Chrome for declarativeNetRequest rules
+│   ├── icon16.png
+│   ├── icon32.png
+│   ├── icon48.png
+│   └── icon128.png
+├── _metadata/
 │   └── generated_indexed_rulesets/_ruleset1
 │
 ├── readeasy-postmessage-listener.js   Helper snippet for web apps receiving postMessage
-│
-└── docs/
-    README.md
-    PROJECT_ARCHITECTURE.md  (this file)
-    PROJECT_SUMMARY.md
-    QUICKSTART.md
-    INSTALL.md
-    TESTING.md
-    FLASH_IT.md
-    GITHUB.md
-    WEBAPP_POSTMESSAGE_README.md
-    READING_LIST_IMPLEMENTATION.md
-    privacy-policy.html
+├── PROJECT_SUMMARY.md       Agent-oriented condensed project summary
+├── QUICKSTART.md            Install/test quickstart
+├── READING_LIST_IMPLEMENTATION.md  Reading-list specific design notes
+└── privacy-policy.html      Extension privacy policy page
 ```
-
-### Manifest Highlights
-
-```json
-{
-  "manifest_version": 3,
-  "permissions": ["activeTab","scripting","storage","declarativeNetRequest","sidePanel","contextMenus"],
-  "host_permissions": ["<all_urls>"],
-  "side_panel": { "default_path": "sidepanel.html" },
-  "background": { "service_worker": "background.js" },
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' https: http: data:;"
-  }
-}
-```
-
-**Why `<all_urls>`?** The reader page and side panel need to `fetch()` images from any CDN domain to embed them as base64. Without this host permission, cross-origin fetch would fail even from extension pages.
 
 ---
 
 ## Storage Architecture
 
-```
-chrome.storage.session  (tab-scoped, cleared when browser closes)
-├── currentArticle           Article data passed from content.js → reader.html
-│   ├── title
-│   ├── byline
-│   ├── content (HTML)
-│   ├── textContent
-│   ├── length
-│   ├── excerpt
-│   ├── siteName
-│   ├── publishedTime
-│   ├── sourceUrl
-│   └── sourceFavicon
-└── flashItState             Flash It playback position
-    ├── wordIndex
-    ├── speed (WPM)
-    └── mode
+```text
+chrome.storage.session  (ephemeral handoff / tab-scoped)
+├── currentArticle              Extracted article payload for reader tab
+└── flashItState                Flash It playback position
 
 chrome.storage.local  (persistent, device-local)
-└── readingListMeta[]        Lightweight metadata array (no HTML content)
-    └── { id, title, url, siteName, addedDate }
+└── readingListMeta[]           Lightweight metadata array
+  └── { id, title, url, siteName, addedDate }
 
 IndexedDB — ReadEasyDB / savedArticles  (persistent, device-local)
 └── savedArticles store
-    ├── id (autoIncrement, keyPath)
-    ├── title
-    ├── url
-    ├── siteName
-    ├── addedDate (indexed)
-    └── htmlContent          Full article HTML with all images as base64 PNG data URIs
-                             (can be 5–30 MB per article depending on image count)
+  ├── id (autoIncrement, keyPath)
+  ├── addedDate (indexed)
+  ├── title
+  ├── url
+  ├── siteName
+  └── htmlContent             Full article HTML with embedded image data URIs
 
 chrome.storage.sync  (persistent, synced across devices)
-└── readerPreferences
-    ├── theme               'light-theme' | 'sepia-theme' | 'dark-theme'
-    ├── fontSize            'font-small' | 'font-normal' | 'font-large' | 'font-xlarge' | 'font-xxlarge'
-    └── wideWidth           boolean
-
-chrome.storage.sync  (persistent, synced across devices)
-└── x4Settings
-  ├── firmware            'crosspoint' | 'stock'
-  └── ip                  default '192.168.1.11' (editable)
+├── readerPreferences
+│   ├── theme                   'light-theme' | 'sepia-theme' | 'dark-theme'
+│   ├── fontSize                'font-small' | 'font-normal' | 'font-large' |
+│   │                           'font-xlarge' | 'font-xxlarge'
+│   └── wideWidth               boolean
+├── x4Settings
+│   ├── firmware                'crosspoint' | 'stock'
+│   └── ip                      default '192.168.1.11' (editable)
+├── floatingButtonEnabled       boolean, default true when missing
+└── floatingButtonPosition      persisted draggable launcher coordinates
 ```
 
 ### Metadata vs Content Split
@@ -265,23 +405,15 @@ This split means the side panel list renders fast, and IndexedDB is only opened 
 
 For X4 flow, only firmware/IP are persisted (`x4Settings`). The **Exclude Images** choice is intentionally session-only (`x4ExcludeImagesSession` in memory) and resets on sidepanel reload.
 
+For the webpage launcher, floater enablement and launcher position are deliberately separate sync keys so visibility toggles do not destroy the user’s saved placement.
+
 ---
 
-## Key Features & Implementation Details
 
 ### 1. Article Extraction (`content.js`)
-
-**Process:**
-1. `document.cloneNode(true)` — never mutate the live page
 2. `makeUrlsAbsolute(clone, baseUrl)` — converts all `src`/`href` attributes to absolute URLs
-   - Removes `srcset` entirely (causes broken Substack CDN URLs)
-   - Converts `data-src` lazy-load attributes to `src`
-   - Fixes Substack CDN: `src.replace(/,w_\d+,c_limit,/, ',')`
-3. `new Readability(clone, { charThreshold: 500 }).parse()`
-4. Returns article object (title, byline, content, textContent, siteName, publishedTime, etc.)
 5. Result goes into `chrome.storage.session` as `currentArticle`
 
-**Limitation:** Only works on pages the user actively clicked on (activeTab). Won't work on `chrome://` or other extension pages.
 
 ### 2. Image Embedding Pipeline (shared pattern)
 
@@ -291,14 +423,8 @@ Both `reader.js` and `sidepanel.js` use identical `fetchImageAsPng(url)` helpers
 async function fetchImageAsPng(url) {
   // 1. fetch() with 20s AbortController timeout, credentials: 'omit'
   //    Extension context + <all_urls> bypasses CORS entirely
-  const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
-  const response = await fetch(url, { credentials: 'omit', signal: controller.signal });
-  clearTimeout(timer);
-
   // 2. Get blob, create objectURL
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
 
   // 3. Load into off-screen <img>, draw to <canvas>, export as PNG
   //    PNG normalisation ensures maximum EPUB reader compatibility
@@ -311,64 +437,42 @@ async function fetchImageAsPng(url) {
       canvas.getContext('2d').drawImage(img, 0, 0);
       resolve(canvas.toDataURL('image/png'));
     };
-    img.onerror = () => reject(new Error('Image decode failed'));
     img.src = objectUrl;
-  });
-
-  URL.revokeObjectURL(objectUrl); // always clean up
-  return dataUrl; // 'data:image/png;base64,...'
-}
-```
-
-**Why fetch() instead of canvas-on-DOM-img?**
-The old approach drew already-rendered `<img>` elements to a canvas. Any cross-origin image taints the canvas, causing `toDataURL()` to throw a security error. `fetch()` from an extension page with `<all_urls>` bypasses CORS entirely — no taint, no error.
-
 **Why normalise to PNG?**
 EPUB readers have inconsistent support for JPEG, WebP, AVIF. PNG is universally supported. The canvas step normalises whatever format the CDN serves (WebP, AVIF, JPEG) into a PNG.
-
 **URL replacement — never use RegExp on base64:**
 Base64 strings contain `+`, `/`, `=`, which are RegExp special characters. The safe replacement pattern is:
-```javascript
 htmlContent = htmlContent.split(src).join(dataUrl);
 htmlContent = htmlContent.split(src.replace(/&/g, '&amp;')).join(dataUrl);
 ```
-
 ### 3. Reading List — background.js
 
 `saveToReadingList` handler:
-1. **Deduplication**: checks `readingListMeta` for existing URL — returns `{ success: true, duplicate: true }` without saving
 2. **Capacity enforcement**: if count ≥ 10, deletes the oldest article from both IndexedDB and metadata before inserting
 3. Writes article to IndexedDB via `addArticle()`, updates `readingListMeta` in `chrome.storage.local`, broadcasts `listUpdated` message
 
 `deleteFromList` handler:
-1. Deletes from IndexedDB by id
 2. Filters metadata array, saves back to `chrome.storage.local`
 3. Broadcasts `listUpdated`
 
-`updateArticleTitle` handler:
 1. Validates `id` and non-empty trimmed title
 2. Updates IndexedDB record by id (`savedArticles.title`)
-3. Updates matching `readingListMeta` item title
 4. Broadcasts `listUpdated`
 
-### 4. Side Panel State Management (`sidepanel.js`)
 
 `checkCurrentTab()` runs on every tab activation and update. It classifies the active tab into three cases:
 - **Case 1 — chrome:// / non-reader extension page**: hide "Current Article" section
 - **Case 2 — reader.html tab**: send `{ action: 'getCurrentArticle' }` message; reader.js responds with `{ title, url, siteName }`
-- **Case 3 — normal http/https page**: show tab title, enable "Add to List" button, store `currentRegularTabId` and `currentRegularTabUrl`
 
 `initPanel()` is debounced (30 ms) so rapid `chrome.storage.onChanged` events (e.g. during batch operations) coalesce into a single re-render.
 
 Both `chrome.storage.onChanged` (primary) and `listUpdated` message (backup) trigger `initPanel()`.
-
 Saved article cards support inline title editing with a top-right pencil icon. Edit mode is card-local and supports keyboard shortcuts:
 - `Enter` = Save
 - `Escape` = Cancel
 
 X4 modal state in sidepanel includes:
 - `pendingX4Articles` and `pendingX4Blob` for current modal session
-- `x4ExcludeImagesSession` (session-only preference)
 - `x4RegenRequestId` and `x4LatestSettledRequestId` for latest-toggle-wins semantics
 - `x4RegenInFlight` to gate Send/Download buttons only during active regeneration
 
@@ -385,14 +489,7 @@ The same image may appear in multiple articles. Simple URL equality fails here b
 const contentKey = `${mimeType}|${len}|${base64.slice(0,64)}|${base64.slice(mid,mid+64)}|${base64.slice(-64)}`;
 ```
 This samples start, middle, and end of the base64 — robust against images that share CDN-identical headers (which would fool a start-only fingerprint).
-
 **c) Base64 whitespace stripping:**
-Some encoders insert `\n` every 76 characters. The EPUB generator strips all whitespace before computing the fingerprint and before writing to the zip.
-
-**d) Named HTML entity decoding:**
-Readability can leave `&nbsp;`, `&mdash;`, etc. in content. XHTML/XML doesn't understand these. `decodeNamedEntities()` converts them to literal Unicode before writing XHTML chapter files. The five XML-native entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`) are left untouched.
-
-**EPUB structure generated:**
 ```
 mimetype                    (STORE, uncompressed — required by EPUB spec)
 META-INF/container.xml
@@ -967,5 +1064,5 @@ else displayTime *= 1.5;                       // Very long
 
 ---
 
-**End of Document** - Last updated: March 28, 2026
+**End of Document** - Last updated: April 17, 2026
 
