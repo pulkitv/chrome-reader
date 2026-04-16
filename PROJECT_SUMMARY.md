@@ -220,3 +220,8 @@ chrome-extension/
 - [ ] Print stylesheet
 - [ ] Unit tests for critical functions (image pipeline, EPUB generation)
 - [ ] Large article optimisation (>50k words for Flash It word extraction)
+
+
+
+## 30 march 2026 - copy of simple web highlighter
+I want to add a feature in the Chrome extension where, if a user selects some content on the web page, then on top of the selected text there is a small marker. The marker when clicked allows the user to convert that highlighted text into a saved article item on the reading list. Similar to how, when a user clicks on "Add to list", the item gets added in the side panel of the Chrome. The title for this highlighted text selected would be "Highlighted text - today's date". Then this text can be easily converted into epub using the methods that we already have in the extension

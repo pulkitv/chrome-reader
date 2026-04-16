@@ -65,7 +65,7 @@
     <li><code>declarativeNetRequest</code> — Set <code>Referer</code> headers on image requests to certain CDNs (e.g. Substack, Medium) so article images load correctly. No content is inspected or modified.</li>
     <li><code>contextMenus</code> — Add a right-click context menu option for quick access to the Reading List side panel</li>
     <li><code>host_permissions: &lt;all_urls&gt;</code> — Required so the extension can fetch images from any CDN domain to embed them locally for Reading List / highlighted selections and export features. Without this, cross-origin image fetches would be blocked.</li>
-    <li><code>content_scripts on &lt;all_urls&gt;</code> — Enables detection of user text selection on webpages to show an on-page save marker. Selection content is processed locally and only saved when the user explicitly clicks the marker.</li>
+    <li><code>content_scripts on &lt;all_urls&gt;</code> — Enables the "Save Selection" feature. When you highlight text on a webpage and click "Save Selection" in the side panel, the content script extracts the selected text locally and returns it to the extension. No data is collected automatically — processing only occurs when you explicitly click the button.</li>
   </ul>
 
 

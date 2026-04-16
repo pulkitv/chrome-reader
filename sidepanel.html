@@ -13,18 +13,29 @@
     <div id="storageInfo" class="storage-info">0/10 articles • 0MB</div>
   </header>
 
+  <!-- Save Selection — always visible when on a regular webpage -->
+  <div id="saveSelectionSection" class="save-selection-section" style="display:none;">
+    <button id="saveSelectionBtn" class="btn-selection">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2 2h12v12H2z" stroke="currentColor" stroke-width="1.5" fill="none" rx="2"/>
+        <path d="M5 5h6M5 8h6M5 11h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>Save Selection</span>
+    </button>
+  </div>
+
   <!-- Current article section (shown when on reader page) -->
   <div id="currentArticleSection" class="current-article-section" style="display: block;">
     <div class="section-label">Current Article</div>
     <div class="article-card current">
-      <div class="article-title" id="currentTitle">No article detected yet</div>
-      <div class="article-meta" id="currentDomain">Open an article page to extract</div>
-      <button id="addToListBtn" class="btn-primary">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <button id="addToListBtn" class="btn-add-mini" aria-label="Add to List" title="Add to List">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
           <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
-        <span>Add to List</span>
+        <span class="sr-only">Add to List</span>
       </button>
+      <div class="article-title" id="currentTitle">No article detected yet</div>
+      <div class="article-meta" id="currentDomain">Open an article page to extract</div>
     </div>
   </div>
 

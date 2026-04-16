@@ -72,6 +72,16 @@ function setupEventListeners() {
     }
   });
   
+  // Save Selection button — captures highlighted text from active tab
+  document.getElementById('saveSelectionBtn').addEventListener('click', async () => {
+    // Re-query the active tab so we always have a fresh tab ID
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tabId = (activeTab && activeTab.url && activeTab.url.startsWith('http')) ? activeTab.id : currentRegularTabId;
+    if (tabId) {
+      await handleSaveSelection(tabId);
+    }
+  });
+
   // Merge EPUB button
   document.getElementById('mergeEpubBtn').addEventListener('click', async () => {
     await handleMergeEPUB();
@@ -152,6 +162,7 @@ async function checkCurrentTab() {
 
     if (!tab || !tab.url) {
       hideCurrentArticleSection('Nothing open');
+      await updateSaveSelectionVisibility();
       return;
     }
 
@@ -166,6 +177,7 @@ async function checkCurrentTab() {
       currentRegularTabId = null;
       currentRegularTabUrl = null;
       hideCurrentArticleSection('Internal page – no article available');
+      await updateSaveSelectionVisibility();
       return;
     }
 
@@ -182,11 +194,13 @@ async function checkCurrentTab() {
         } else {
           currentReaderTabId = null;
           hideCurrentArticleSection('Article not loaded yet');
+          await updateSaveSelectionVisibility();
         }
       } catch (err) {
         console.warn('[SidePanel] Could not reach reader tab:', err.message);
         currentReaderTabId = null;
         hideCurrentArticleSection('Reader page still loading…');
+        await updateSaveSelectionVisibility();
       }
       return;
     }
@@ -210,9 +224,27 @@ async function checkCurrentTab() {
 
     // Fallback
     hideCurrentArticleSection('Unsupported page');
+    await updateSaveSelectionVisibility();
   } catch (error) {
     console.error('[SidePanel] Error in checkCurrentTab:', error);
     hideCurrentArticleSection('Could not detect current page');
+    await updateSaveSelectionVisibility();
+  }
+}
+
+/**
+ * Update Save Selection button visibility based on the active tab.
+ * This runs independently of the article card — Save Selection stays visible
+ * whenever the user is on a regular http/https page.
+ */
+async function updateSaveSelectionVisibility() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const isRegularPage = tab && tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'));
+    document.getElementById('saveSelectionSection').style.display = isRegularPage ? '' : 'none';
+  } catch (err) {
+    console.warn('[SidePanel] Could not check tab for Save Selection:', err);
+    document.getElementById('saveSelectionSection').style.display = 'none';
   }
 }
 
@@ -234,6 +266,9 @@ function showCurrentArticleSection(articleData) {
   const addBtn = document.getElementById('addToListBtn');
   addBtn.disabled = false;
   addBtn.querySelector('span').textContent = 'Add to List';
+
+  // Show/hide Save Selection based on current tab type
+  updateSaveSelectionVisibility();
 }
 
 /**
@@ -250,6 +285,7 @@ function hideCurrentArticleSection(reason) {
   document.getElementById('currentTitle').textContent = 'No article detected';
   document.getElementById('currentDomain').textContent = reason || 'Navigate to a webpage to add it';
   document.getElementById('addToListBtn').disabled = true;
+  // Note: Save Selection visibility is managed independently by updateSaveSelectionVisibility()
 }
 
 /**
@@ -271,6 +307,7 @@ async function handleAddToListViaTab(tabId) {
       currentReaderTabId = null;
       hideCurrentArticleSection('Article saved to Reading List');
       await initPanel();
+      await updateSaveSelectionVisibility();
     } else {
       throw new Error((response && response.error) || 'Failed to save article');
     }
@@ -324,6 +361,88 @@ async function fetchImageAsPng(url) {
   } catch (err) {
     console.warn('[SidePanel] Image skipped:', url.substring(0, 100), '—', err.message);
     return null;
+  }
+}
+
+/**
+ * Handle saving the user's text selection from the active tab.
+ * Sends a message to the content script (selection.js) to extract the
+ * highlighted HTML, then saves it as a reading list article.
+ */
+async function handleSaveSelection(tabId) {
+  const saveBtn = document.getElementById('saveSelectionBtn');
+
+  // Preserve tab state so the button stays visible after save
+  const savedRegularTabId = currentRegularTabId;
+  const savedRegularTabUrl = currentRegularTabUrl;
+
+  try {
+    saveBtn.disabled = true;
+    saveBtn.querySelector('span').textContent = 'Saving…';
+
+    // Re-query active tab for a fresh ID (avoids stale references)
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const targetTabId = (activeTab && activeTab.url && activeTab.url.startsWith('http')) ? activeTab.id : tabId;
+
+    // Ask the content script for the current selection
+    const result = await chrome.tabs.sendMessage(targetTabId, { action: 'getSelectedHTML' });
+
+    if (!result || !result.success) {
+      throw new Error((result && result.error) || 'No text selected on this page.');
+    }
+
+    // Embed remote images (re-fetch from extension context to bypass CORS)
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = result.htmlContent;
+
+    const remoteImages = Array.from(tempDiv.querySelectorAll('img')).filter(img => {
+      const src = img.getAttribute('src') || '';
+      return src.startsWith('http://') || src.startsWith('https://');
+    });
+
+    if (remoteImages.length > 0) {
+      saveBtn.querySelector('span').textContent = 'Loading images…';
+      const conversions = await Promise.allSettled(
+        remoteImages.map(img => fetchImageAsPng(img.getAttribute('src')))
+      );
+      remoteImages.forEach((img, i) => {
+        const res = conversions[i];
+        if (res.status === 'fulfilled' && res.value) {
+          img.setAttribute('src', res.value);
+        }
+      });
+    }
+
+    const htmlContent = tempDiv.innerHTML;
+    saveBtn.querySelector('span').textContent = 'Saving…';
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'saveToReadingList',
+      article: {
+        title: 'Highlighted text - ' + new Date().toLocaleDateString(),
+        htmlContent,
+        url: result.pageUrl + '#highlight-' + Date.now(),
+        siteName: result.pageTitle || 'Selection'
+      }
+    });
+
+    if (!response || !response.success) {
+      throw new Error((response && response.error) || 'Failed to save selection');
+    }
+
+    showToast('Selection saved ✓', 'success', 2000);
+
+    // Re-render saved list but restore tab tracking so user can save more selections
+    await initPanel();
+    currentRegularTabId = savedRegularTabId;
+    currentRegularTabUrl = savedRegularTabUrl;
+    document.getElementById('saveSelectionSection').style.display = '';
+  } catch (error) {
+    console.error('[SidePanel] Error saving selection:', error);
+    showToast(error.message || 'Failed to save selection', 'error');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.querySelector('span').textContent = 'Save Selection';
   }
 }
 
@@ -399,6 +518,7 @@ async function handleAddToListFromRegularTab(tabId, tabUrl) {
     currentRegularTabUrl = null;
     hideCurrentArticleSection('Article saved to Reading List');
     await initPanel();
+    await updateSaveSelectionVisibility();
   } catch (error) {
     console.error('[SidePanel] Error saving regular tab article:', error);
     showToast(error.message || 'Failed to add article', 'error');
