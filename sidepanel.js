@@ -17,24 +17,189 @@ let x4ExcludeImagesSession = false;
 let x4RegenRequestId = 0;
 let x4LatestSettledRequestId = 0;
 let x4RegenInFlight = false;
+const X4_MODAL_MODE_SEND = 'send';
+const X4_MODAL_MODE_DOWNLOAD = 'download';
+let x4ModalMode = X4_MODAL_MODE_SEND;
 let floaterEnabled = true;
 
 const X4_DEFAULT_IP = '192.168.1.11';
 const X4_SETTINGS_KEY = 'x4Settings';
 const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
+const AUTH_STATE_KEY = 'authState';
+const AUTH_PROVIDER_GOOGLE = 'google';
+
+let authState = getSignedOutAuthState();
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('[SidePanel] DOMContentLoaded - JS loaded');
   await initPanel();
   await loadFloaterSetting();
+  await loadAuthState();
   applyFloaterSettingUI();
+  applyAuthUI();
   setupEventListeners();
   await checkCurrentTab();
 });
 
 // Debounce handle so rapid concurrent calls to initPanel coalesce into one
 let _initPanelTimer = null;
+
+function getSignedOutAuthState() {
+  return {
+    isSignedIn: false,
+    provider: AUTH_PROVIDER_GOOGLE,
+    profile: {
+      email: '',
+      name: '',
+      picture: ''
+    },
+    lastSignInAt: null
+  };
+}
+
+function normalizeAuthState(raw) {
+  const base = getSignedOutAuthState();
+  if (!raw || typeof raw !== 'object') return base;
+
+  const profile = raw.profile && typeof raw.profile === 'object' ? raw.profile : {};
+  const isSignedIn = raw.isSignedIn === true;
+  const normalized = {
+    isSignedIn,
+    provider: raw.provider || AUTH_PROVIDER_GOOGLE,
+    profile: {
+      email: typeof profile.email === 'string' ? profile.email : '',
+      name: typeof profile.name === 'string' ? profile.name : '',
+      picture: typeof profile.picture === 'string' ? profile.picture : ''
+    },
+    lastSignInAt: Number.isFinite(raw.lastSignInAt) ? raw.lastSignInAt : null
+  };
+
+  if (!normalized.isSignedIn) {
+    normalized.profile = { email: '', name: '', picture: '' };
+    normalized.lastSignInAt = null;
+  }
+
+  return normalized;
+}
+
+async function loadAuthState() {
+  try {
+    const data = await chrome.storage.sync.get(AUTH_STATE_KEY);
+    authState = normalizeAuthState(data && data[AUTH_STATE_KEY]);
+  } catch (err) {
+    console.warn('[SidePanel] Failed to load auth state:', err);
+    authState = getSignedOutAuthState();
+  }
+}
+
+function applyAuthUI() {
+  const authBtn = document.getElementById('authBtn');
+  const authAvatar = document.getElementById('authAvatar');
+  const authGuestIcon = document.getElementById('authGuestIcon');
+  const authMenuAvatar = document.getElementById('authMenuAvatar');
+  const authMenuName = document.getElementById('authMenuName');
+  const authMenuEmail = document.getElementById('authMenuEmail');
+  const authSignOutBtn = document.getElementById('authSignOutBtn');
+
+  if (!authBtn || !authAvatar || !authGuestIcon || !authMenuAvatar || !authMenuName || !authMenuEmail || !authSignOutBtn) {
+    return;
+  }
+
+  const signedIn = authState && authState.isSignedIn === true;
+  const hasPicture = signedIn && authState.profile && authState.profile.picture;
+
+  authBtn.classList.toggle('signed-in', signedIn);
+  authBtn.classList.toggle('signed-out', !signedIn);
+
+  if (signedIn && hasPicture) {
+    authAvatar.src = authState.profile.picture;
+    authAvatar.hidden = false;
+    authGuestIcon.hidden = true;
+
+    authMenuAvatar.src = authState.profile.picture;
+    authMenuAvatar.hidden = false;
+  } else {
+    authAvatar.removeAttribute('src');
+    authAvatar.hidden = true;
+    authGuestIcon.hidden = false;
+
+    authMenuAvatar.removeAttribute('src');
+    authMenuAvatar.hidden = true;
+  }
+
+  if (signedIn) {
+    authBtn.title = 'Account';
+    authBtn.setAttribute('aria-label', 'Open account menu');
+    authMenuName.textContent = (authState.profile && authState.profile.name) || 'Signed in';
+    authMenuEmail.textContent = (authState.profile && authState.profile.email) || 'Google account';
+    authSignOutBtn.hidden = false;
+  } else {
+    authBtn.title = 'Sign in with Google';
+    authBtn.setAttribute('aria-label', 'Sign in with Google');
+    authMenuName.textContent = 'Guest';
+    authMenuEmail.textContent = 'Not signed in';
+    authSignOutBtn.hidden = true;
+    toggleAuthMenu(false);
+  }
+}
+
+function toggleAuthMenu(show) {
+  const dropdown = document.getElementById('authMenuDropdown');
+  const btn = document.getElementById('authBtn');
+  if (!dropdown || !btn) return;
+
+  if (show) {
+    dropdown.removeAttribute('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+  } else {
+    dropdown.setAttribute('hidden', '');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+async function handleAuthButtonClick() {
+  if (!authState || authState.isSignedIn !== true) {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'authSignIn' });
+      if (!response || !response.success) {
+        throw new Error((response && response.error) || 'Sign-in failed');
+      }
+
+      authState = normalizeAuthState(response.authState);
+      applyAuthUI();
+      showToast('Signed in ✓', 'success', 1800);
+    } catch (err) {
+      console.error('[SidePanel] Sign-in failed:', err);
+      showToast(err.message || 'Sign-in failed', 'error');
+    }
+    return;
+  }
+
+  const dropdown = document.getElementById('authMenuDropdown');
+  const shouldShow = dropdown.hasAttribute('hidden');
+  toggleAuthMenu(shouldShow);
+  if (shouldShow) {
+    toggleHeaderMenu(false);
+  }
+}
+
+async function handleAuthSignOut() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'authSignOut' });
+    if (!response || !response.success) {
+      throw new Error((response && response.error) || 'Sign-out failed');
+    }
+
+    authState = normalizeAuthState(response.authState);
+    applyAuthUI();
+    toggleAuthMenu(false);
+    showToast('Signed out', 'success', 1500);
+  } catch (err) {
+    console.error('[SidePanel] Sign-out failed:', err);
+    showToast(err.message || 'Sign-out failed', 'error');
+  }
+}
 
 /**
  * Initialize panel - load data and render
@@ -67,10 +232,24 @@ async function initPanel() {
  */
 function setupEventListeners() {
   console.log('[SidePanel] setupEventListeners called');
+  const authBtn = document.getElementById('authBtn');
+  const authSignOutBtn = document.getElementById('authSignOutBtn');
   const headerMenuBtn = document.getElementById('headerMenuBtn');
   const openSettingsBtn = document.getElementById('openSettingsBtn');
   const settingsBackBtn = document.getElementById('settingsBackBtn');
   const floaterEnabledSelect = document.getElementById('floaterEnabledSelect');
+
+  authBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await handleAuthButtonClick();
+  });
+
+  authSignOutBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await handleAuthSignOut();
+  });
 
   headerMenuBtn.addEventListener('click', (e) => {
     e.preventDefault();
@@ -151,6 +330,7 @@ function setupEventListeners() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      toggleAuthMenu(false);
       toggleHeaderMenu(false);
       const modal = document.getElementById('x4Modal');
       if (modal.classList.contains('open')) closeX4Modal();
@@ -158,10 +338,16 @@ function setupEventListeners() {
   });
 
   document.addEventListener('click', (e) => {
+    const authDropdown = document.getElementById('authMenuDropdown');
+    const authButton = document.getElementById('authBtn');
     const dropdown = document.getElementById('headerMenuDropdown');
     const btn = document.getElementById('headerMenuBtn');
-    if (dropdown.hasAttribute('hidden')) return;
-    if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+
+    if (!authDropdown.hasAttribute('hidden') && !authDropdown.contains(e.target) && !authButton.contains(e.target)) {
+      toggleAuthMenu(false);
+    }
+
+    if (!dropdown.hasAttribute('hidden') && !dropdown.contains(e.target) && !btn.contains(e.target)) {
       toggleHeaderMenu(false);
     }
   });
@@ -171,12 +357,22 @@ function setupEventListeners() {
     if (area === 'local' && changes.readingListMeta) {
       initPanel();
     }
+
+    if (area === 'sync' && changes[AUTH_STATE_KEY]) {
+      authState = normalizeAuthState(changes[AUTH_STATE_KEY].newValue);
+      applyAuthUI();
+    }
   });
 
   // Also listen for explicit listUpdated broadcasts from background.js (backup)
   chrome.runtime.onMessage.addListener((message) => {
     if (message.action === 'listUpdated') {
       initPanel();
+    }
+
+    if (message.action === 'authUpdated' && message.authState) {
+      authState = normalizeAuthState(message.authState);
+      applyAuthUI();
     }
   });
   
@@ -222,6 +418,7 @@ function openSettingsPage() {
   const settingsPage = document.getElementById('settingsPage');
   mainPage.style.display = 'none';
   settingsPage.style.display = 'flex';
+  toggleAuthMenu(false);
   toggleHeaderMenu(false);
   applyFloaterSettingUI();
 }
@@ -239,6 +436,7 @@ function toggleHeaderMenu(show) {
   if (!dropdown || !btn) return;
 
   if (show) {
+    toggleAuthMenu(false);
     dropdown.removeAttribute('hidden');
     btn.setAttribute('aria-expanded', 'true');
   } else {
@@ -875,7 +1073,7 @@ async function handleMergeEPUB() {
 
   try {
     mergeBtn.disabled = true;
-    mergeBtn.querySelector('span').textContent = 'Generating EPUB...';
+    mergeBtn.querySelector('span').textContent = 'Preparing...';
 
     if (typeof JSZip === 'undefined') {
       throw new Error('JSZip library not loaded');
@@ -887,12 +1085,15 @@ async function handleMergeEPUB() {
       throw new Error('No articles to merge');
     }
 
-    await generateMergedEPUB(articles);
+    pendingX4Articles = articles;
+    pendingX4Blob = null;
+    pendingX4SizeText = '-';
+    pendingX4DefaultName = `ReadEasy_Merged_${new Date().toISOString().split('T')[0]}.epub`;
 
-    showToast('EPUB downloaded successfully ✓', 'success', 3000);
+    await openX4Modal(X4_MODAL_MODE_DOWNLOAD);
   } catch (error) {
-    console.error('Error generating EPUB:', error);
-    showToast('EPUB generation failed: ' + error.message, 'error');
+    console.error('Error preparing EPUB for download:', error);
+    showToast('Could not prepare EPUB: ' + error.message, 'error');
   } finally {
     mergeBtn.disabled = readingListMeta.length === 0;
     mergeBtn.querySelector('span').textContent = 'Merge & Download EPUB';
@@ -907,7 +1108,7 @@ async function handleMergeAndSendToX4() {
 
   try {
     mergeSendBtn.disabled = true;
-    mergeSendBtn.querySelector('span').textContent = 'Generating EPUB...';
+    mergeSendBtn.querySelector('span').textContent = 'Preparing...';
 
     if (typeof JSZip === 'undefined') {
       throw new Error('JSZip library not loaded');
@@ -923,7 +1124,7 @@ async function handleMergeAndSendToX4() {
     pendingX4SizeText = '-';
     pendingX4DefaultName = `ReadEasy_Merged_${new Date().toISOString().split('T')[0]}.epub`;
 
-    await openX4Modal();
+    await openX4Modal(X4_MODAL_MODE_SEND);
   } catch (error) {
     console.error('Error preparing EPUB for X4:', error);
     showToast('Could not prepare EPUB: ' + error.message, 'error');
@@ -936,8 +1137,13 @@ async function handleMergeAndSendToX4() {
 /**
  * Open Send to X4 modal with prepared EPUB metadata
  */
-async function openX4Modal() {
+async function openX4Modal(mode = X4_MODAL_MODE_SEND) {
   const modal = document.getElementById('x4Modal');
+  const titleEl = document.getElementById('x4ModalTitle');
+  const actionRow = modal.querySelector('.x4-action-row');
+  const sendBtn = document.getElementById('x4SendBtn');
+  const downloadBtn = document.getElementById('x4DownloadBtn');
+  const transportSection = modal.querySelector('.x4-settings-section');
   const nameInput = document.getElementById('x4EpubName');
   const sizeEl = document.getElementById('x4EpubSize');
   const firmwareSelect = document.getElementById('x4FirmwareSelect');
@@ -945,6 +1151,8 @@ async function openX4Modal() {
   const statusEl = document.getElementById('x4ConnectionStatus');
   const responsePreviewEl = document.getElementById('x4ResponsePreview');
   const excludeImagesCheckbox = document.getElementById('x4ExcludeImages');
+
+  x4ModalMode = mode === X4_MODAL_MODE_DOWNLOAD ? X4_MODAL_MODE_DOWNLOAD : X4_MODAL_MODE_SEND;
 
   const settings = await loadX4Settings();
   firmwareSelect.value = settings.firmware || 'crosspoint';
@@ -957,6 +1165,19 @@ async function openX4Modal() {
   statusEl.classList.remove('success', 'error');
   responsePreviewEl.hidden = true;
   responsePreviewEl.textContent = '';
+
+  if (x4ModalMode === X4_MODAL_MODE_DOWNLOAD) {
+    titleEl.textContent = 'Download EPUB';
+    sendBtn.hidden = true;
+    transportSection.hidden = true;
+    actionRow.classList.add('single-action');
+  } else {
+    titleEl.textContent = 'Send to X4';
+    sendBtn.hidden = false;
+    transportSection.hidden = false;
+    actionRow.classList.remove('single-action');
+  }
+  downloadBtn.hidden = false;
 
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
@@ -984,8 +1205,11 @@ function closeX4Modal() {
 function setX4ActionButtonsEnabled(enabled) {
   const sendBtn = document.getElementById('x4SendBtn');
   const downloadBtn = document.getElementById('x4DownloadBtn');
-  sendBtn.disabled = !enabled;
-  downloadBtn.disabled = !enabled;
+  const allowSend = x4ModalMode === X4_MODAL_MODE_SEND;
+  const allowDownload = x4ModalMode === X4_MODAL_MODE_DOWNLOAD || x4ModalMode === X4_MODAL_MODE_SEND;
+
+  sendBtn.disabled = !enabled || !allowSend;
+  downloadBtn.disabled = !enabled || !allowDownload;
 }
 
 /**
@@ -1048,6 +1272,11 @@ async function regenerateX4BlobForModal() {
  * Download from Send to X4 modal
  */
 function handleX4Download() {
+  if (x4ModalMode !== X4_MODAL_MODE_DOWNLOAD && x4ModalMode !== X4_MODAL_MODE_SEND) {
+    showToast('Download is not available in the current modal mode.', 'error', 2000);
+    return;
+  }
+
   if (x4RegenInFlight && x4LatestSettledRequestId !== x4RegenRequestId) {
     showToast('EPUB is still regenerating. Please wait.', 'error', 2000);
     return;
@@ -1099,6 +1328,11 @@ async function handleCheckX4Connection() {
  * Send prepared EPUB to X4 device
  */
 async function handleSendToX4() {
+  if (x4ModalMode !== X4_MODAL_MODE_SEND) {
+    showToast('Send is only available in Send to X4 mode.', 'error', 2000);
+    return;
+  }
+
   const sendBtn = document.getElementById('x4SendBtn');
   const statusEl = document.getElementById('x4ConnectionStatus');
   const responsePreviewEl = document.getElementById('x4ResponsePreview');

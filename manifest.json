@@ -7,10 +7,19 @@
     "activeTab",
     "scripting",
     "storage",
+    "identity",
     "declarativeNetRequest",
     "sidePanel",
     "contextMenus"
   ],
+  "oauth2": {
+    "client_id": "1013859959230-qal9p9c4u2qad5mc7p3sp31vhqh7rp04.apps.googleusercontent.com",
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ]
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
