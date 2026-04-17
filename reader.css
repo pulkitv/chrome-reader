@@ -160,6 +160,26 @@ body {
   stroke-width: 2.5;
 }
 
+/* Feedback button styling */
+#feedbackBtn {
+  background: #d9f7e5;
+  border: 1px solid #9ed9b7;
+  color: #1f6b45;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+#feedbackBtn:hover {
+  background: #c9efd9;
+  border-color: #8acaa6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(31, 107, 69, 0.18);
+}
+
+#feedbackBtn svg {
+  stroke: #1f6b45;
+}
+
 .source-link {
   display: flex;
   align-items: center;

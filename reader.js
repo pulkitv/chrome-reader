@@ -233,11 +233,6 @@ function setupEventListeners() {
     openEmailEpubModal();
   });
 
-  // Merge EPUB button
-  document.getElementById('mergeEpubBtn').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://merge-epubs.vercel.app/' });
-  });
-
   // TTS controls
   document.getElementById('ttsToggleBtn').addEventListener('click', () => {
     if (!('speechSynthesis' in window)) return;

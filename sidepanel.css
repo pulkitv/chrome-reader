@@ -619,6 +619,23 @@ button:disabled {
   gap: 8px;
 }
 
+.feedback-link {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-color);
+  text-decoration: none;
+}
+
+.feedback-link:hover,
+.feedback-link:focus-visible {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
 /* X4 modal */
 .x4-modal {
   position: fixed;

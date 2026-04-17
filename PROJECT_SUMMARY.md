@@ -86,6 +86,11 @@ Use this section as the primary source of truth when loading this project into a
     - Auth state persists in `chrome.storage.sync.authState`
     - Access token remains in service-worker memory only
 
+9. **Feedback collection links are now surfaced in-product**
+   - Reader top navigation now shows a **Feedback** CTA (replacing the old Merge EPUBs external link)
+   - Side panel footer now includes **Share feedback & ideas**
+   - Both open `https://readeasy.featurebase.app/` in a new tab
+
 ---
 
 ### Chronological progression (condensed but complete)
@@ -130,6 +135,11 @@ Use this section as the primary source of truth when loading this project into a
 - Fixed launcher menu initial top-left auto-open regression after page refresh
 - Added background tab-wide rebroadcast (`floaterSettingChanged`) so disabling floater applies immediately across open tabs
 
+#### April 17, 2026 follow-up feedback channel additions
+- Replaced reader header **Merge EPUBs** external shortcut with **Feedback**
+- Added side panel footer **Share feedback & ideas** link
+- Standardized both links to `https://readeasy.featurebase.app/`
+
 ---
 
 ### Current operational contracts
@@ -154,6 +164,10 @@ Use this section as the primary source of truth when loading this project into a
     - background manages token + Google profile fetch + normalized `authState` persistence
     - sidepanel updates via `authUpdated` message and `chrome.storage.sync` state
 
+6. **Feedback path (external navigation only)**
+   - Reader and side panel feedback CTAs are static anchors to `https://readeasy.featurebase.app/`
+   - No extension runtime message or article payload is sent by these CTA clicks
+
 ---
 
 ### If another agent continues from here, it should assume
@@ -165,6 +179,7 @@ Use this section as the primary source of truth when loading this project into a
 5. Floating launcher visibility must remain controlled by synced settings, default enabled
 6. Floater click behavior should remain menu-based (reading view + side panel) and drag-safe
 7. Launcher position persistence must remain independent of enable/disable state
+8. Feedback CTAs should continue to point to the Featurebase portal unless intentionally changed
 
 ---
 
@@ -179,6 +194,7 @@ Use this section as the primary source of truth when loading this project into a
 - Confirm disabling `ReadEasy Floater` from settings hides launcher immediately
 - Confirm re-enabling restores launcher without needing reinstall
 - Confirm auth sign-in/out state persists and header icon updates correctly
+- Confirm reader/sidepanel feedback links open `https://readeasy.featurebase.app/`
 
 ---
 
@@ -219,7 +235,7 @@ chrome-extension/
 ├── reader.css              Themes (light/sepia/dark), Flash overlay, progress bar, toasts
 │
 ├── sidepanel.html          Side panel UI — Save Selection, current article card,
-│                           reading list, overflow menu, settings page
+│                           reading list, overflow menu, settings page, footer feedback link
 ├── sidepanel.js            ~940 lines — list render, add/remove, Save Selection,
 │                           inline title edit, auth UI/state, EPUB merge, tab detection,
 │                           floater settings persistence, storage listeners
@@ -329,6 +345,11 @@ chrome-extension/
 5. Side panel refreshes via `listUpdated`/`chrome.storage.onChanged`
 6. `Merge & Download EPUB` now uses the edited title automatically (from IndexedDB)
 
+### Feedback collection links (reader + side panel)
+1. User clicks **Feedback** in reader top navigation, or **Share feedback & ideas** in side panel footer
+2. Browser opens `https://readeasy.featurebase.app/` in a new tab
+3. No article HTML/content payload is posted by this action
+
 ---
 
 ## Key Features
@@ -353,6 +374,7 @@ chrome-extension/
 | Inline title editing | `sidepanel.js` + `background.js` | Pencil icon on saved cards, inline input, Save/Cancel, persisted to metadata + IndexedDB |
 | Merged EPUB | `sidepanel.js` | Multi-chapter, image dedup, valid XHTML, EPUB 2+3 nav |
 | Merge & Send to X4 | `sidepanel.html/js/css` | Modal flow, connection check, upload, response preview, optional image exclusion with guarded async regeneration |
+| Feedback collection links | `reader.html` + `sidepanel.html` | Reader header **Feedback** + side panel footer **Share feedback & ideas** open Featurebase portal |
 | CDN image fix | `rules.json` | declarativeNetRequest sets Referer for Substack, Medium |
 | Keyboard shortcuts | `reader.js` | F, Space, R, +/−, Esc |
 
@@ -447,6 +469,11 @@ chrome-extension/
 - Added background rebroadcast for floater setting updates across all open tabs
 - Added sidepanel Google sign-in and sign-out with auth icon, profile dropdown, and normalized sync state
 
+### April 17, 2026 — Feedback Link Surfacing (Reader + Side Panel)
+- Replaced reader header external **Merge EPUBs** shortcut with **Feedback**
+- Added side panel footer **Share feedback & ideas** CTA
+- Both links now route users to `https://readeasy.featurebase.app/` for feedback and feature requests
+
 ---
 
 ## Next Steps / Known Gaps
@@ -485,6 +512,7 @@ This historical note is retained for chronology only.
 - `d454174` — UX/state polish: compact plus add button + persistent Save Selection behavior and visibility decoupling from current-article card lifecycle
 - April 17 follow-up — draggable webpage launcher + sidepanel Settings page + synced `ReadEasy Floater` control
 - April 17 latest — floater click menu (`openReaderView` / `openSidePanel`), refresh/menu visibility fix, cross-tab floater rebroadcast, sidepanel Google auth
+- April 17 latest+ — reader/sidepanel Featurebase feedback CTA links added (`https://readeasy.featurebase.app/`)
 
 ### Quick verification checklist for continuation work
 
@@ -498,3 +526,4 @@ This historical note is retained for chronology only.
 - [ ] Floater toggle update applies across already-open tabs without requiring page refresh
 - [ ] Sign-in icon (guest/avatar) and auth dropdown behavior are correct after panel reopen
 - [ ] Internal/unsupported pages (`chrome://`, extension pages) correctly hide Save Selection
+- [ ] Reader and sidepanel feedback CTAs open Featurebase feedback portal

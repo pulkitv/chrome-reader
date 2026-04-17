@@ -97,6 +97,11 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
   - Persists normalized auth state in `chrome.storage.sync.authState`
   - Access token is memory-only in service worker (not persisted)
 
+9. **Feedback collection links are now exposed in both primary UIs**
+  - Reader header includes a **Feedback** CTA (replacing the older external Merge EPUB shortcut)
+  - Side panel footer includes **Share feedback & ideas**
+  - Both route to `https://readeasy.featurebase.app/` in a new tab
+
 ---
 
 ### Chronological Timeline (Accurate Through April 17, 2026)
@@ -150,6 +155,11 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - Fixed launcher menu initial render bug (menu appearing at top-left after page refresh)
 - Added background broadcast (`floaterSettingChanged`) so floater enable/disable updates all open tabs immediately
 
+#### Phase K — Feedback channel surfacing
+- Replaced reader header external **Merge EPUBs** shortcut with **Feedback**
+- Added side panel footer **Share feedback & ideas** link
+- Standardized both feedback CTAs to `https://readeasy.featurebase.app/`
+
 ---
 
 ### Current Message Contracts You Must Preserve
@@ -196,7 +206,8 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 5. Keep floating launcher visibility governed by synced floater setting, not hardcoded render timing
 6. Keep floater click behavior menu-based (Switch to reading view / Open side panel), drag-safe, and viewport-clamped
 7. Preserve launcher position persistence independently of enabled/disabled state
-8. Validate flows across three tab classes:
+8. Preserve feedback CTA destination (`https://readeasy.featurebase.app/`) unless explicitly changed by product decision
+9. Validate flows across three tab classes:
   - regular `http/https`
   - `reader.html`
   - unsupported/internal pages (`chrome://`, extension pages)
@@ -215,6 +226,7 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - [ ] Floating launcher can be dragged and preserves position
 - [ ] `ReadEasy Floater` setting hides/shows launcher immediately across open pages
 - [ ] Side panel auth icon supports sign-in/out and persists normalized state
+- [ ] Reader header Feedback and side panel footer feedback links both open `https://readeasy.featurebase.app/`
 
 ---
 
@@ -259,6 +271,7 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - **Merged EPUB export** — combine all saved articles into a single, image-deduplicated EPUB
 - **Merge & Send to X4** — generate merged EPUB in side panel modal and upload to LAN device
 - **Optional image-free X4 EPUB mode** — checkbox-triggered regeneration with live file-size update
+- **Feedback collection links** — Reader + side panel CTAs route users to Featurebase feedback portal
 - Single-article EPUB and HTML download from reader view
 
 **Tech Stack:** Vanilla JS, Chrome Extension APIs (MV3), Mozilla Readability.js, JSZip
@@ -294,6 +307,7 @@ User Click
 [5] reader.html / reader.js / reader.css
     │  renders article
     │  Flash It, TTS, export
+  │  Reader header Feedback CTA → Featurebase portal
     │  "Add to List" button → fetchImageAsPng → saveToReadingList message
     ▼
 [6] IndexedDB + chrome.storage.local  (persistent store)
@@ -305,6 +319,7 @@ User Click
   │  Save Selection + compact current-article add button
   │  inline title edit (pencil icon + in-card input)
   │  overflow menu + Settings page
+    │  footer feedback CTA → Featurebase portal
     │  "Add to List" from regular tab → fetchImageAsPng → saveToReadingList
     │  Merge & Download EPUB
     │  Merge & Send to X4 modal (name/size/firmware/IP/check/upload)
@@ -418,7 +433,8 @@ chrome-extension/
 │                            progress bar, notification toasts
 │
 ├── sidepanel.html           Side panel UI — Save Selection section, current article card,
-│                            reading list, overflow menu, Settings page, storage info
+│                            reading list, overflow menu, Settings page, storage info,
+│                            footer feedback link
 ├── sidepanel.js             Side panel logic (~940 lines) — list render, add/remove,
 │                            Save Selection, compact add button, auth UI/state,
 │                            floater settings persistence,
