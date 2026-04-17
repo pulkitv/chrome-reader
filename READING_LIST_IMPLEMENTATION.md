@@ -1,23 +1,27 @@
-# Reading List & Merge EPUB Feature - Implementation Complete
+# Reading List & Merge EPUB Feature - Implementation Status (Current)
 
 ## ✅ Implementation Summary
 
-Successfully implemented a complete Reading List feature with side panel UI and EPUB merging functionality.
+Reading List, side panel management, and merged EPUB functionality are fully implemented and actively extended with settings, auth, and floater integrations.
 
-## Files Created
+> **Note:** This document originated in Feb 2026 and has been updated to reflect the current April 17, 2026 architecture.
+
+## Core Files
 
 1. **db.js** - IndexedDB wrapper with Promise-based interface
 2. **sidepanel.html** - Side panel UI structure
 3. **sidepanel.css** - Side panel styling with theme support
 4. **sidepanel.js** - Side panel logic and EPUB merge functionality
 
-## Files Modified
+## Key Modified Files (Current)
 
-1. **manifest.json** - Added `sidePanel` and `contextMenus` permissions, configured side panel
+1. **manifest.json** - Includes `sidePanel`, `contextMenus`, `identity`, `oauth2`, content script registration for `selection.js`
 2. **reader.html** - Added "Add to List" button to toolbar
-3. **reader.js** - Added save to list functionality with 10s image timeout, message listener
+3. **reader.js** - Add-to-list pipeline with robust image embedding and message listener
 4. **reader.css** - Added notification toast styles
-5. **background.js** - Added context menu, message handlers for save/delete operations
+5. **background.js** - Save/delete/update handlers, reader-open path, auth handlers, floater setting rebroadcast
+6. **selection.js** - Save Selection responder + draggable floating launcher with two-option menu
+7. **sidepanel.html/css/js** - Settings page, auth icon/dropdown, merge modal mode reuse (download/send)
 
 ## Features Implemented
 
@@ -25,14 +29,17 @@ Successfully implemented a complete Reading List feature with side panel UI and 
 - Fixed header with storage indicator (X/10 articles • YMB)
 - Current article section (shows when on reader page)
 - Scrollable list of saved articles (chronological, oldest first)
-- Footer with "Merge & Download EPUB" button
+- Footer with "Merge & Download EPUB" and "Merge & Send to X4"
 - Toast notifications for errors/success
+- Header auth icon (guest/avatar) and account dropdown
+- Header overflow menu with in-panel Settings page
 
 ### 2. Reading List Management
-- **Add to List**: Converts all images to base64 with 10s timeout per image
+- **Add to List**: Converts images to embedded PNG data URLs via fetch + canvas pipeline
 - **Storage**: IndexedDB for full HTML, chrome.storage.local for metadata
 - **Limit**: 10 articles maximum (auto-deletes oldest when full)
 - **Remove**: Delete individual articles from list
+- **Edit title**: Inline pencil editor updates both metadata and IndexedDB title
 - **Storage Indicator**: Shows count and estimated size in MB
 
 ### 3. EPUB Merging
@@ -41,17 +48,31 @@ Successfully implemented a complete Reading List feature with side panel UI and 
 - Creates multi-chapter EPUB with auto-generated TOC
 - Chapter titles: "Article Title (domain.com, MM/DD/YY)"
 - Downloads as: `ReadEasy_Merged_YYYY-MM-DD.epub`
+- Supports modal-based pre-download filename edit
 
 ### 4. Image Handling
-- **10s timeout per image** - Fails save if any image times out
-- **Base64 conversion** - All images embedded as data URLs
-- **Error handling** - Shows error toast if image loading fails
-- **No partial saves** - Requires ALL images to load successfully
+- **20s timeout per image** via `AbortController`
+- **PNG normalization** - Source formats (WebP/JPEG/AVIF/etc.) normalized to PNG data URLs
+- **Resilient loading** - Uses `Promise.allSettled`; single-image failures do not block full article save
+- **Safe replacement** - Uses `split+join` for URL replacement in HTML strings (avoids RegExp issues with base64)
 
 ### 5. State Synchronization
 - **Tab changes**: Detects when user switches to/from reader pages
 - **List updates**: Broadcasts to side panel when articles added/removed
 - **Current article**: Shows in side panel when on reader view
+- **Floater setting sync**: `floatingButtonEnabled` changes propagate live across open tabs
+
+### 6. Floating Launcher Integration
+- Draggable launcher appears on regular webpages (when enabled)
+- Click opens two-option menu:
+       - **Switch to reading view** (`openReaderView`)
+       - **Open side panel** (`openSidePanel`)
+- Position persists in sync storage (`floatingButtonPosition`)
+
+### 7. Optional Google Sign-In Integration
+- Side panel supports sign-in/sign-out via `chrome.identity`
+- Auth state stored in sync as normalized object (`authState`)
+- Access token remains in-memory in background service worker
 
 ## How to Use
 
@@ -62,7 +83,7 @@ Successfully implemented a complete Reading List feature with side panel UI and 
 ### Adding Articles to List
 1. Open any article in ReadEasy reader view
 2. Click **"Add to List"** button in toolbar (bottom row, right side)
-3. Wait for images to load (up to 10s per image)
+3. Wait for images to load (up to 20s per image)
 4. Success notification appears: "Added to Reading List ✓"
 5. Article disappears from current article section (already saved)
 6. Open side panel to see saved article in list
@@ -77,15 +98,23 @@ Successfully implemented a complete Reading List feature with side panel UI and 
 1. Open side panel
 2. Ensure you have saved articles (button disabled if list empty)
 3. Click **"Merge & Download EPUB"** button
-4. Wait for EPUB generation
-5. File downloads as `ReadEasy_Merged_YYYY-MM-DD.epub`
+4. Enter/confirm filename in modal
+5. Wait for EPUB generation
+6. File downloads as `ReadEasy_Merged_YYYY-MM-DD.epub`
+
+### Merge & Send to X4
+1. Open side panel
+2. Click **"Merge & Send to X4"**
+3. Configure filename, firmware, and device IP in modal
+4. (Optional) Toggle **Exclude Images** to regenerate smaller EPUB
+5. Send to device or download from the same modal
 
 ## Testing Checklist
 
 - [ ] Load extension in Chrome (`chrome://extensions/` → Load unpacked)
 - [ ] Extract an article using extension icon
 - [ ] Click "Add to List" button in reader view
-- [ ] Verify all images load (check console for timeouts)
+- [ ] Verify article saves even if one remote image fails
 - [ ] Verify success notification appears
 - [ ] Right-click extension icon → "Open Reading List"
 - [ ] Verify article appears in side panel list
@@ -101,7 +130,9 @@ Successfully implemented a complete Reading List feature with side panel UI and 
 - [ ] Verify all chapters present with correct TOC
 - [ ] Verify images display in EPUB
 - [ ] Test adding 10th article (should auto-delete oldest)
-- [ ] Test image timeout (on slow/broken image source)
+- [ ] Test floater disable/enable from settings across open tabs
+- [ ] Test floater click menu actions (reader view + side panel)
+- [ ] Test auth sign-in/sign-out in side panel header
 
 ## Storage Details
 
@@ -124,7 +155,7 @@ Successfully implemented a complete Reading List feature with side panel UI and 
 ```
 Reader View → Add to List
            ↓
-    Preload & Convert Images (10s timeout)
+    Preload & Convert Images (20s timeout, per image)
            ↓
     Send to Background Script
            ↓
@@ -154,7 +185,7 @@ Side Panel → Click Merge
 
 ## Error Handling
 
-- **Image timeout**: Shows error toast, aborts save
+- **Image timeout**: Timed-out images are skipped; article save can still succeed
 - **IndexedDB quota**: Shows error toast
 - **EPUB generation failure**: Shows error toast, re-enables button
 - **Network errors**: Caught and displayed in toast
@@ -166,8 +197,8 @@ Side Panel → Click Merge
 2. **Image timeout**: 10s per image may not be enough for very slow connections
 3. **Storage size**: IndexedDB quota varies by browser/disk space
 4. **No cloud sync**: Articles stored locally only
-5. **No editing**: Cannot edit saved articles after saving
-6. **No reordering**: List always chronological (oldest first)
+5. **No custom ordering**: List remains chronological
+6. **Auth is optional only**: Sign-in exists, but reading-list content is not cloud-synced
 
 ## Next Steps (Future Enhancements)
 
@@ -205,5 +236,6 @@ Side Panel → Click Merge
 
 ---
 
-**Implementation Date**: February 28, 2026
-**Status**: ✅ Complete and ready for testing
+**Initial Implementation Date**: February 28, 2026
+**Last Updated**: April 17, 2026
+**Status**: ✅ Complete, extended, and in active use

@@ -19,6 +19,9 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
 📚 **Reading List & Side Panel** - Save up to 10 articles (with images) for later, manage and merge them in a native Chrome side panel  
 🗂️ **EPUB Merge** - Combine multiple saved articles into a single EPUB with deduped images and valid XHTML  
 💾 **IndexedDB Storage** - Full article HTML is stored locally for offline access and merging  
+🖱️ **Floating Launcher** - Draggable webpage launcher with a two-option menu (**Switch to reading view** / **Open side panel**)  
+⚙️ **Side Panel Settings** - In-panel settings for ReadEasy floater visibility (synced)  
+🔐 **Optional Google Sign-In** - Side panel guest/avatar auth with extension-native Google identity flow  
 🔗 **Beta View** - Send article HTML + styling to your web app via postMessage  
 
 ## Installation
@@ -51,8 +54,14 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
    - Download as HTML or EPUB for offline reading
    - Email EPUB files to yourself or others
    - **Add to Reading List**: Click "Add to List" to save the article (with images) for later
+    - **Use the Floating Launcher**: On regular webpages, click the launcher to open menu actions:
+       - **Switch to reading view**
+       - **Open side panel**
    - **Open the Side Panel**: Use the extension context menu or after saving to view/manage your reading list
-   - **Merge & Download EPUB**: In the side panel, select multiple articles and merge them into a single EPUB file
+    - **Side Panel Settings**: Use the 3-dot menu in side panel header to open settings and enable/disable the floater
+    - **Auth**: Use the side panel auth icon (guest/avatar) to sign in/out with Google
+    - **Merge & Download EPUB**: In the side panel, click merge to open filename prompt modal before download
+    - **Merge & Send to X4**: In the side panel, generate merged EPUB and send to local X4 device (with optional Exclude Images mode)
    - **Beta View**: Click to open in your web app reader view
 
 ## Keyboard Shortcuts
@@ -70,14 +79,15 @@ A clean, distraction-free reading experience for Chrome. This extension extracts
 ```
 chrome-extension/
 ├── manifest.json          # Extension configuration (MV3)
-├── background.js          # Service worker - handles extension clicks, IndexedDB, reading list
+├── background.js          # Service worker - extraction, IndexedDB, reading list, auth, floater broadcasts
 ├── content.js             # Content script - extracts article content
+├── selection.js           # Declarative content script - Save Selection + floating launcher/menu
 ├── reader.html            # Reader view UI
 ├── reader.js              # Reader view functionality, Flash It, EPUB, add to list
 ├── reader.css             # Reader view styling
 ├── sidepanel.html         # Native Chrome side panel for reading list
-├── sidepanel.js           # Side panel logic, list, EPUB merge
-├── sidepanel.css          # Side panel styling, themes
+├── sidepanel.js           # Side panel logic, list, settings, auth, EPUB merge/X4
+├── sidepanel.css          # Side panel styling, themes, auth/settings/modal UI
 ├── db.js                  # IndexedDB wrapper (used by sidepanel)
 ├── rules.json             # declarativeNetRequest rules for image loading
 ├── libs/
@@ -95,8 +105,8 @@ chrome-extension/
 ### Architecture
 
 - **Manifest V3** - Uses the latest Chrome extension architecture
-- **Service Worker** - Background script handles toolbar clicks
-- **Content Script** - Runs on active tab to extract article content
+- **Service Worker** - Background script handles toolbar clicks, auth, and cross-tab updates
+- **Content Scripts** - `content.js` for extraction + `selection.js` for Save Selection/floater
 - **Session Storage** - Passes extracted content to reader view
 
 ### Content Extraction
@@ -135,10 +145,27 @@ Features:
 ### EPUB Generation
 
 - Creates standards-compliant EPUB 3.0 files
-- Embeds images using canvas conversion to bypass CORS
+- Embeds images using fetch + canvas PNG normalization for compatibility
 - Includes article metadata (title, author, date)
 - Handles HTML-encoded URLs (`&amp;` to `&`)
 - Can be emailed directly from reader view
+
+### Floating Launcher + Side Panel Settings
+
+- `selection.js` injects a draggable launcher on regular webpages
+- Click opens a two-option menu:
+   - **Switch to reading view** (`openReaderView`)
+   - **Open side panel** (`openSidePanel`)
+- Position persists in `chrome.storage.sync.floatingButtonPosition`
+- Visibility is controlled by `chrome.storage.sync.floatingButtonEnabled`
+- Floater setting changes are propagated to open tabs immediately
+
+### Optional Google Sign-In
+
+- Side panel header contains an auth icon (guest/avatar)
+- Uses `chrome.identity.getAuthToken()` + Google profile retrieval
+- Normalized auth state is stored in `chrome.storage.sync.authState`
+- Access tokens are kept in-memory in service worker (not persisted)
 
 ### Beta View
 
@@ -148,7 +175,7 @@ Features:
 ### Security
 
 - **HTML Sanitization** - Removes scripts and event handlers
-- **Minimal Permissions** - Uses `activeTab` for privacy
+- **Scoped Extension Permissions** - Uses Chrome extension APIs required for extraction, side panel, identity, and storage
 - **CSP Compliant** - No inline scripts or eval
 - **Safe URL Handling** - Validates and converts URLs safely
 
@@ -219,7 +246,7 @@ This extension:
 - ✅ Processes all content locally
 - ✅ Does not send data to external servers by default
 - ✅ Only sends article HTML + CSS when you explicitly click "Beta View"
-- ✅ Only accesses the active tab when clicked
+- ✅ Uses optional Google sign-in only when explicitly triggered
 - ✅ Stores preferences locally using Chrome storage
 
 ## Credits

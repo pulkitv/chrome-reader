@@ -11,8 +11,10 @@
   const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
   const DEFAULT_OFFSET = 20;
   let floatingBtn = null;
+  let floatingMenu = null;
   let floatingButtonEnabled = true;
   let hasResizeListener = false;
+  let hasMenuListeners = false;
   let isDragging = false;
   let dragStarted = false;
   let dragStartX = 0;
@@ -47,9 +49,161 @@
     if (!floatingBtn) return;
     const rect = floatingBtn.getBoundingClientRect();
     positionFloatingButton(rect.left, rect.top);
+    if (!floatingMenu || floatingMenu.hidden) return;
+    positionFloatingMenu();
+  }
+
+  function ensureMenuListeners() {
+    if (hasMenuListeners) return;
+    hasMenuListeners = true;
+
+    document.addEventListener('mousedown', (e) => {
+      if (!floatingMenu || floatingMenu.hidden) return;
+      if (floatingMenu.contains(e.target) || (floatingBtn && floatingBtn.contains(e.target))) return;
+      closeFloatingMenu();
+    }, true);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeFloatingMenu();
+      }
+    }, true);
+  }
+
+  function positionFloatingMenu() {
+    if (!floatingBtn || !floatingMenu) return;
+
+    const btnRect = floatingBtn.getBoundingClientRect();
+    const menuRect = floatingMenu.getBoundingClientRect();
+
+    // Prefer above the floater; fallback below if needed.
+    const preferredLeft = btnRect.right - menuRect.width;
+    const preferredTop = btnRect.top - menuRect.height - 8;
+    const fallbackTop = btnRect.bottom + 8;
+
+    let top = preferredTop;
+    if (top < 8) {
+      top = fallbackTop;
+    }
+
+    const bounded = getViewportBoundedPosition(
+      preferredLeft,
+      top,
+      menuRect.width || 188,
+      menuRect.height || 88
+    );
+
+    floatingMenu.style.left = `${bounded.left}px`;
+    floatingMenu.style.top = `${bounded.top}px`;
+  }
+
+  function closeFloatingMenu() {
+    if (!floatingMenu) return;
+    floatingMenu.hidden = true;
+    floatingMenu.style.display = 'none';
+  }
+
+  function openFloatingMenu() {
+    if (!floatingBtn || !floatingMenu) return;
+    floatingMenu.hidden = false;
+    floatingMenu.style.display = 'flex';
+    positionFloatingMenu();
+  }
+
+  function toggleFloatingMenu() {
+    if (!floatingMenu) return;
+    if (floatingMenu.hidden) {
+      openFloatingMenu();
+    } else {
+      closeFloatingMenu();
+    }
+  }
+
+  function ensureFloatingMenu() {
+    if (floatingMenu || !document.body) return;
+
+    floatingMenu = document.createElement('div');
+    floatingMenu.hidden = true;
+    floatingMenu.style.display = 'none';
+    floatingMenu.setAttribute('role', 'menu');
+    floatingMenu.style.cssText = [
+      'position:fixed',
+      'left:0',
+      'top:0',
+      'min-width:188px',
+      'background:#ffffff',
+      'border:1px solid rgba(0,0,0,0.12)',
+      'border-radius:10px',
+      'box-shadow:0 10px 26px rgba(0,0,0,0.22)',
+      'padding:6px',
+      'display:none',
+      'flex-direction:column',
+      'gap:4px',
+      'z-index:2147483647'
+    ].join(';');
+
+    const readViewBtn = document.createElement('button');
+    readViewBtn.type = 'button';
+    readViewBtn.setAttribute('role', 'menuitem');
+    readViewBtn.textContent = 'Switch to reading view';
+    readViewBtn.style.cssText = [
+      'width:100%',
+      'border:none',
+      'background:transparent',
+      'padding:8px 10px',
+      'text-align:left',
+      'font-size:13px',
+      'color:#111827',
+      'border-radius:8px',
+      'cursor:pointer'
+    ].join(';');
+    readViewBtn.addEventListener('mouseenter', () => {
+      readViewBtn.style.background = '#f3f4f6';
+    });
+    readViewBtn.addEventListener('mouseleave', () => {
+      readViewBtn.style.background = 'transparent';
+    });
+    readViewBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFloatingMenu();
+      chrome.runtime.sendMessage({ action: 'openReaderView' }).catch((err) => {
+        console.warn('[ReadEasy Floating Button] Failed to open reader view:', err);
+      });
+    });
+
+    const sidePanelBtn = document.createElement('button');
+    sidePanelBtn.type = 'button';
+    sidePanelBtn.setAttribute('role', 'menuitem');
+    sidePanelBtn.textContent = 'Open side panel';
+    sidePanelBtn.style.cssText = readViewBtn.style.cssText;
+    sidePanelBtn.addEventListener('mouseenter', () => {
+      sidePanelBtn.style.background = '#f3f4f6';
+    });
+    sidePanelBtn.addEventListener('mouseleave', () => {
+      sidePanelBtn.style.background = 'transparent';
+    });
+    sidePanelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFloatingMenu();
+      chrome.runtime.sendMessage({ action: 'openSidePanel' }).catch((err) => {
+        console.warn('[ReadEasy Floating Button] Failed to open side panel:', err);
+      });
+    });
+
+    floatingMenu.appendChild(readViewBtn);
+    floatingMenu.appendChild(sidePanelBtn);
+    document.body.appendChild(floatingMenu);
+    ensureMenuListeners();
   }
 
   function removeFloatingButton() {
+    closeFloatingMenu();
+    if (floatingMenu) {
+      floatingMenu.remove();
+      floatingMenu = null;
+    }
     if (!floatingBtn) return;
     floatingBtn.remove();
     floatingBtn = null;
@@ -98,6 +252,9 @@
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
       dragStarted = true;
     }
+    if (dragStarted) {
+      closeFloatingMenu();
+    }
     positionFloatingButton(startLeft + dx, startTop + dy);
   }
 
@@ -108,6 +265,9 @@
     document.removeEventListener('mouseup', handleDragEnd, true);
     const rect = floatingBtn.getBoundingClientRect();
     await saveFloatingButtonPosition(rect.left, rect.top);
+    if (floatingMenu && !floatingMenu.hidden) {
+      positionFloatingMenu();
+    }
   }
 
   function attachFloatingButtonDrag() {
@@ -134,9 +294,7 @@
         dragStarted = false;
         return;
       }
-      chrome.runtime.sendMessage({ action: 'openSidePanel' }).catch((err) => {
-        console.warn('[ReadEasy Floating Button] Failed to open side panel:', err);
-      });
+      toggleFloatingMenu();
     }, true);
   }
 
@@ -182,6 +340,7 @@
     floatingBtn.appendChild(icon);
 
     document.body.appendChild(floatingBtn);
+    ensureFloatingMenu();
     attachFloatingButtonDrag();
 
     try {
@@ -318,6 +477,18 @@
       chrome.storage.sync.set({ [FLOATING_BUTTON_ENABLED_KEY]: true }).catch(() => {});
     }
 
+    updateFloatingButtonVisibility();
+  });
+
+  // Also handle direct broadcast from background (covers dormant/background tabs)
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.action !== 'floaterSettingChanged') return;
+    const nextValue = message.enabled;
+    if (typeof nextValue === 'boolean') {
+      floatingButtonEnabled = nextValue;
+    } else {
+      floatingButtonEnabled = true;
+    }
     updateFloatingButtonVisibility();
   });
 

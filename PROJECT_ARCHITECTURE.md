@@ -1,5 +1,49 @@
 # ReadEasy Extension — Project Architecture & Development Guide
 
+---
+
+## 📋 Documentation Maintenance Rules (Read Before Editing This File)
+
+> **This section is mandatory reading for any human or AI agent that edits this document.**
+> These rules exist to ensure this file always functions as a reliable, self-contained handoff document that any new CLI agent can read to fully understand and continue work on the project.
+
+### Purpose of This File
+
+This file is the **primary technical reference** for the ReadEasy Chrome extension. It is intentionally written so that a new agent — with no prior conversation context — can read it alone and:
+1. Understand the complete current architecture
+2. Know every file, what it does, and how components interact
+3. Understand all storage contracts, message contracts, and invariants
+4. Know the full chronological history of implementation decisions
+5. Begin implementing new features or fixing bugs without needing to re-ask basic questions
+
+### Rules for Updating This File
+
+1. **Update on every architectural change** — Any time a file's role changes, a new message action is added, a storage key is added/removed, or a new component is introduced, this file must be updated in the same session.
+
+2. **Keep the canonical snapshot current** — The section titled `Current Architecture Snapshot` must always reflect what is actually implemented today, not what was planned. Remove items that were reverted or superseded.
+
+3. **Append to the chronological timeline** — Every significant implementation session must add a new Phase entry (Phase A, B, C…) to the timeline. Never edit history — only append to it. Include the commit hash if available.
+
+4. **Update message contracts when they change** — The `Current Message Contracts You Must Preserve` section is the source of truth for inter-component communication. Keep every `action` name, request shape, and response shape accurate.
+
+5. **Update storage keys when they change** — The `Storage Architecture` section must list every key used across all storage types (`session`, `local`, `sync`, IndexedDB). Never leave orphaned or missing keys.
+
+6. **Update the File Structure section** — The `File Structure & Purpose` section must describe every file in the repository, including its current role. If a file's role changes (e.g., `selection.js` was repurposed), update the description.
+
+7. **Update invariants when new constraints are established** — The `Invariants for Future Agents` section lists behaviors that must never be regressed. Add to this list whenever a deliberate design decision is made that future agents must respect.
+
+8. **Update the Verification Checklist** — The `Practical Verification Checklist` must include a test step for every major user-facing behavior. Keep it current so new agents can validate their work.
+
+9. **Do not delete history** — Old phase entries, archived notes, and past bug-fix descriptions must be preserved. Agents reading this in the future need historical context to avoid re-introducing known-bad patterns.
+
+10. **Resolve conflicts in favor of the most recent canonical snapshot** — If older sections below conflict with the latest canonical snapshot at the top, the snapshot wins. Add a note to the older section if needed rather than deleting it.
+
+11. **Keep `Last Updated` accurate** — Update the `Last Updated` date at the top of the canonical snapshot section every time this file is edited.
+
+12. **Both files are paired** — `PROJECT_ARCHITECTURE.md` (deep-dive) and `PROJECT_SUMMARY.md` (quick orientation) must be updated together. They serve different audiences but must not contradict each other.
+
+---
+
 > ## April 17, 2026 — Canonical Agent Handoff Update (Read This First)
 >
 > This section supersedes older historical notes below and is intended for new CLI agents (for example, Anti-Gravity-like workflows) that need a reliable chronological understanding of what has already been implemented.
@@ -35,7 +79,9 @@
 
 6. **Floating launcher architecture now exists on webpages**
   - `selection.js` renders a draggable floating launcher on regular websites
-  - Launcher uses extension icon assets and opens the side panel on click
+  - Launcher uses extension icon assets and opens a two-option menu on click:
+    - **Switch to reading view** → `{ action: 'openReaderView' }`
+    - **Open side panel** → `{ action: 'openSidePanel' }`
   - Launcher position persists in synced storage via `floatingButtonPosition`
 
 7. **Side panel now includes a settings surface**
@@ -44,6 +90,12 @@
   - Settings currently include `ReadEasy Floater` enable/disable control
   - Control persists to `chrome.storage.sync.floatingButtonEnabled`
   - Default state is enabled when key is missing
+
+8. **Google sign-in is implemented in side panel header**
+  - Side panel header includes auth icon (guest/avatar) left of overflow menu
+  - Uses `chrome.identity.getAuthToken()` and Google profile endpoint
+  - Persists normalized auth state in `chrome.storage.sync.authState`
+  - Access token is memory-only in service worker (not persisted)
 
 ---
 
@@ -90,6 +142,14 @@
 - Added in-panel settings page with `ReadEasy Floater` toggle
 - Added live synced enable/disable behavior for launcher via `chrome.storage.onChanged`
 
+#### Phase J — Auth + floater menu + cross-tab hardening
+- Added Google sign-in/sign-out in side panel header (guest ↔ avatar state)
+- Added background auth message handlers: `authSignIn`, `authGetState`, `authSignOut`
+- Added shared `openReaderViewForTab(tab)` service-worker path used by toolbar and floater menu
+- Floater click now opens a two-option menu (reading view / side panel)
+- Fixed launcher menu initial render bug (menu appearing at top-left after page refresh)
+- Added background broadcast (`floaterSettingChanged`) so floater enable/disable updates all open tabs immediately
+
 ---
 
 ### Current Message Contracts You Must Preserve
@@ -103,14 +163,27 @@
   - `{ action: 'saveToReadingList', article }`
   - `{ action: 'deleteFromList', id }`
   - `{ action: 'updateArticleTitle', id, title }`
+  - `{ action: 'openSidePanel' }`
+  - `{ action: 'openReaderView' }`
+  - `{ action: 'authSignIn' }`
+  - `{ action: 'authGetState' }`
+  - `{ action: 'authSignOut' }`
 
 3. **Background broadcast**
   - `{ action: 'listUpdated' }`
+  - `{ action: 'authUpdated', authState }`
+  - `{ action: 'floaterSettingChanged', enabled }` (tab-targeted send from service worker)
 
 4. **Synced floater settings contract**
   - `chrome.storage.sync.floatingButtonEnabled`
   - Missing value must be treated as `true` and self-healed to `true`
   - `selection.js` must react live to changes so open pages update immediately
+  - service worker also rebroadcasts setting changes to all tabs for reliability in dormant/background tab content-script contexts
+
+5. **Synced auth state contract**
+  - `chrome.storage.sync.authState`
+  - shape: `{ isSignedIn, provider, profile: { email, name, picture }, lastSignInAt }`
+  - signed-out state must be normalized to empty profile and `lastSignInAt: null`
 
 ---
 
@@ -121,8 +194,9 @@
 3. Do not re-introduce intrusive on-page marker UX unless explicitly requested
 4. Keep Save Selection visibility independent from current-article card reset
 5. Keep floating launcher visibility governed by synced floater setting, not hardcoded render timing
-6. Preserve launcher position persistence independently of enabled/disabled state
-7. Validate flows across three tab classes:
+6. Keep floater click behavior menu-based (Switch to reading view / Open side panel), drag-safe, and viewport-clamped
+7. Preserve launcher position persistence independently of enabled/disabled state
+8. Validate flows across three tab classes:
   - regular `http/https`
   - `reader.html`
   - unsupported/internal pages (`chrome://`, extension pages)
@@ -137,8 +211,10 @@
 - [ ] Merged EPUB includes those selection entries
 - [ ] Sidepanel updates correctly on `listUpdated` + storage changes
 - [ ] Floating launcher appears by default on regular webpages
-- [ ] Floating launcher opens sidepanel and can be dragged
+- [ ] Floating launcher menu opens on click and offers both actions (reading view + side panel)
+- [ ] Floating launcher can be dragged and preserves position
 - [ ] `ReadEasy Floater` setting hides/shows launcher immediately across open pages
+- [ ] Side panel auth icon supports sign-in/out and persists normalized state
 
 ---
 
@@ -176,7 +252,8 @@
 - Web App Handoff — sends article HTML + CSS to an external web app via `postMessage`
 - **Reading List** — save up to 10 articles (with embedded images) to IndexedDB
 - **Save Selection** — sidepanel-driven selected-text capture from normal webpages
-- **Floating launcher** — draggable webpage entry point for opening the side panel
+- **Floating launcher** — draggable webpage launcher with two-click actions (reading view or side panel)
+- **Google sign-in** — optional side panel header auth via Chrome identity APIs
 - **Side panel settings** — in-panel overflow menu with synced floater preference
 - **Inline title editing** — pencil icon in side panel cards to rename saved articles
 - **Merged EPUB export** — combine all saved articles into a single, image-deduplicated EPUB
@@ -199,7 +276,7 @@ User Click
 [1] background.js  (service worker)
     │  injects content script
     │  manages IndexedDB & metadata
-    │  coordinates messages
+  │  coordinates messages + auth + cross-tab floater rebroadcast
     ▼
 [2] content.js  (injected into active tab)
     │  Readability extraction
@@ -208,7 +285,7 @@ User Click
     ▼
 [3] selection.js  (declarative content script on webpages)
   │  responds to getSelectedHTML
-  │  renders draggable floating launcher
+  │  renders draggable floating launcher + click menu
   │  persists launcher position / reacts to synced setting changes
   ▼
 [4] chrome.storage.session  (data bus)
@@ -269,9 +346,21 @@ User Click
 1. `selection.js` loads on regular webpages and reads synced floater settings
 2. If `floatingButtonEnabled !== false`, it renders a draggable launcher using `icons/icon48.png`
 3. Drag end persists `floatingButtonPosition` to `chrome.storage.sync`
-4. Launcher click sends an open-sidepanel request through extension messaging
+4. Launcher click toggles an in-page menu with:
+  - **Switch to reading view** → `{ action: 'openReaderView' }`
+  - **Open side panel** → `{ action: 'openSidePanel' }`
 5. sidepanel Settings page updates `floatingButtonEnabled`
 6. `selection.js` listens to `chrome.storage.onChanged` so already-open tabs hide/show the launcher live
+7. service worker listens to sync-key changes and sends `{ action: 'floaterSettingChanged' }` to all tabs to ensure cross-tab immediate consistency
+
+### Message Flow: Sidepanel Google Sign-In
+
+1. User clicks auth icon in side panel header
+2. If signed out, sidepanel sends `{ action: 'authSignIn' }` to background service worker
+3. background acquires token using `chrome.identity.getAuthToken({ interactive: true })`
+4. background fetches Google profile (`email`, `name`, `picture`) and writes normalized `authState` to `chrome.storage.sync`
+5. background broadcasts `{ action: 'authUpdated', authState }`; sidepanel also listens to sync-storage changes as fallback
+6. On sign-out, sidepanel sends `{ action: 'authSignOut' }`; background clears cached tokens and writes normalized signed-out state
 
 ### Message Flow: "Add to List" from Reader Tab (sidepanel delegation)
 
@@ -311,13 +400,14 @@ User Click
 ```
 chrome-extension/
 ├── manifest.json            MV3 config — permissions, side_panel, host_permissions,
-│                            content scripts, web-accessible resources, CSP
+│                            identity/oauth2, content scripts, web-accessible resources, CSP
 ├── background.js            Service worker — toolbar click handler, IndexedDB helpers,
 │                            saveToReadingList / deleteFromList / updateArticleTitle handlers,
-│                            open-sidepanel request handling, context menu
+│                            open-sidepanel/open-reader handlers, auth handlers,
+│                            floater setting rebroadcast, context menu
 ├── content.js               Injected content script — Readability extraction, URL normalisation
 ├── selection.js             Declarative content script — Save Selection responder,
-│                            floating launcher render/drag/open-sidepanel logic
+│                            floating launcher render/drag/menu logic
 ├── db.js                    IndexedDB wrapper used by sidepanel.js — Promise-based CRUD,
 │                            includes title update helper
 │
@@ -330,7 +420,8 @@ chrome-extension/
 ├── sidepanel.html           Side panel UI — Save Selection section, current article card,
 │                            reading list, overflow menu, Settings page, storage info
 ├── sidepanel.js             Side panel logic (~940 lines) — list render, add/remove,
-│                            Save Selection, compact add button, floater settings persistence,
+│                            Save Selection, compact add button, auth UI/state,
+│                            floater settings persistence,
 │                            guarded async regeneration, fetchImageAsPng, tab detection,
 │                            storage change listeners
 ├── sidepanel.css            Side panel styles — card layout, compact add button, menu,

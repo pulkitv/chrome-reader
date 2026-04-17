@@ -7,6 +7,165 @@
 const DB_NAME = 'ReadEasyDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'savedArticles';
+const AUTH_STATE_KEY = 'authState';
+const AUTH_PROVIDER_GOOGLE = 'google';
+
+let inMemoryAuthToken = null;
+
+function getSignedOutAuthState() {
+  return {
+    isSignedIn: false,
+    provider: AUTH_PROVIDER_GOOGLE,
+    profile: {
+      email: '',
+      name: '',
+      picture: ''
+    },
+    lastSignInAt: null
+  };
+}
+
+function normalizeAuthState(raw) {
+  const base = getSignedOutAuthState();
+  if (!raw || typeof raw !== 'object') return base;
+
+  const profile = raw.profile && typeof raw.profile === 'object' ? raw.profile : {};
+  const isSignedIn = raw.isSignedIn === true;
+  const normalized = {
+    isSignedIn,
+    provider: raw.provider || AUTH_PROVIDER_GOOGLE,
+    profile: {
+      email: typeof profile.email === 'string' ? profile.email : '',
+      name: typeof profile.name === 'string' ? profile.name : '',
+      picture: typeof profile.picture === 'string' ? profile.picture : ''
+    },
+    lastSignInAt: Number.isFinite(raw.lastSignInAt) ? raw.lastSignInAt : null
+  };
+
+  if (!normalized.isSignedIn) {
+    normalized.profile = { email: '', name: '', picture: '' };
+    normalized.lastSignInAt = null;
+  }
+
+  return normalized;
+}
+
+async function saveAuthState(authState) {
+  const normalized = normalizeAuthState(authState);
+  await chrome.storage.sync.set({ [AUTH_STATE_KEY]: normalized });
+
+  chrome.runtime.sendMessage({ action: 'authUpdated', authState: normalized }).catch(() => {
+    // Sidepanel might not be open.
+  });
+
+  return normalized;
+}
+
+async function getStoredAuthState() {
+  const data = await chrome.storage.sync.get(AUTH_STATE_KEY);
+  return normalizeAuthState(data && data[AUTH_STATE_KEY]);
+}
+
+function getAuthToken({ interactive }) {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive }, (token) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message || 'Failed to acquire auth token'));
+        return;
+      }
+      resolve(token || null);
+    });
+  });
+}
+
+function removeCachedAuthToken(token) {
+  return new Promise((resolve) => {
+    if (!token) {
+      resolve();
+      return;
+    }
+
+    chrome.identity.removeCachedAuthToken({ token }, () => {
+      resolve();
+    });
+  });
+}
+
+function clearAllCachedAuthTokens() {
+  return new Promise((resolve) => {
+    if (typeof chrome.identity.clearAllCachedAuthTokens !== 'function') {
+      resolve();
+      return;
+    }
+
+    chrome.identity.clearAllCachedAuthTokens(() => {
+      resolve();
+    });
+  });
+}
+
+async function fetchGoogleProfile(token) {
+  const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Google profile request failed (${response.status})`);
+  }
+
+  const payload = await response.json();
+  return {
+    email: payload && payload.email ? String(payload.email) : '',
+    name: payload && payload.name ? String(payload.name) : '',
+    picture: payload && payload.picture ? String(payload.picture) : ''
+  };
+}
+
+async function signInWithGoogle() {
+  const manifest = chrome.runtime.getManifest();
+  if (!manifest.oauth2 || !manifest.oauth2.client_id || manifest.oauth2.client_id.startsWith('REPLACE_WITH_')) {
+    throw new Error('OAuth client ID is not configured in manifest.json');
+  }
+
+  const token = await getAuthToken({ interactive: true });
+  if (!token) {
+    throw new Error('No auth token returned by Google');
+  }
+
+  inMemoryAuthToken = token;
+
+  try {
+    const profile = await fetchGoogleProfile(token);
+    const authState = {
+      isSignedIn: true,
+      provider: AUTH_PROVIDER_GOOGLE,
+      profile,
+      lastSignInAt: Date.now()
+    };
+
+    return await saveAuthState(authState);
+  } catch (error) {
+    await removeCachedAuthToken(token);
+    inMemoryAuthToken = null;
+    throw error;
+  }
+}
+
+async function signOutGoogle() {
+  try {
+    if (inMemoryAuthToken) {
+      await removeCachedAuthToken(inMemoryAuthToken);
+    }
+
+    await clearAllCachedAuthTokens();
+  } finally {
+    inMemoryAuthToken = null;
+  }
+
+  return await saveAuthState(getSignedOutAuthState());
+}
 
 function initDB() {
   return new Promise((resolve, reject) => {
@@ -122,6 +281,48 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
+async function openReaderViewForTab(tab) {
+  if (!tab || !tab.id || !tab.url) {
+    throw new Error('No active tab available');
+  }
+
+  // Don't run on chrome:// or extension pages
+  if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    throw new Error('Cannot run ReadEasy on this page');
+  }
+
+  // Inject the content script to extract article content
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    files: ['libs/Readability.js', 'content.js']
+  });
+
+  // Get the extracted article from the content script
+  const article = results[0].result;
+
+  if (!article || !article.content) {
+    throw new Error('Failed to extract article content');
+  }
+
+  // Store the article in session storage with the original URL
+  await chrome.storage.session.set({
+    currentArticle: {
+      ...article,
+      sourceUrl: tab.url,
+      sourceFavicon: tab.favIconUrl
+    }
+  });
+
+  // Open the reader view in a new tab with the original URL as query parameter
+  // This helps with referrer policies for loading external images
+  const readerUrl = new URL(chrome.runtime.getURL('reader.html'));
+  readerUrl.searchParams.set('url', tab.url);
+
+  await chrome.tabs.create({
+    url: readerUrl.toString()
+  });
+}
+
 // Handle messages from reader and sidepanel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
@@ -203,6 +404,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         sendResponse({ success: true });
       }
+      else if (message.action === 'openReaderView') {
+        if (!sender.tab) {
+          throw new Error('No sender tab for reader view');
+        }
+
+        await openReaderViewForTab(sender.tab);
+        sendResponse({ success: true });
+      }
       else if (message.action === 'updateArticleTitle') {
         const id = Number(message.id);
         const newTitle = (message.title || '').trim();
@@ -232,6 +441,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         sendResponse({ success: true });
       }
+      else if (message.action === 'authSignIn') {
+        const authState = await signInWithGoogle();
+        sendResponse({ success: true, authState });
+      }
+      else if (message.action === 'authGetState') {
+        const authState = await getStoredAuthState();
+        sendResponse({ success: true, authState });
+      }
+      else if (message.action === 'authSignOut') {
+        const authState = await signOutGoogle();
+        sendResponse({ success: true, authState });
+      }
       else {
         sendResponse({ success: false, error: 'Unknown action' });
       }
@@ -244,47 +465,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep channel open for async response
 });
 
+// Broadcast floater setting changes to all open tabs
+const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'sync' || !(FLOATING_BUTTON_ENABLED_KEY in changes)) return;
+  const newValue = changes[FLOATING_BUTTON_ENABLED_KEY].newValue;
+  chrome.tabs.query({}, (tabs) => {
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) continue;
+      chrome.tabs.sendMessage(tab.id, { action: 'floaterSettingChanged', enabled: newValue }).catch(() => {});
+    }
+  });
+});
+
 // Handle extension icon click
 chrome.action.onClicked.addListener(async (tab) => {
-  // Don't run on chrome:// or extension pages
-  if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-    console.log('Cannot run ReadEasy on this page');
-    return;
-  }
-
   try {
-    // Inject the content script to extract article content
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['libs/Readability.js', 'content.js']
-    });
-
-    // Get the extracted article from the content script
-    const article = results[0].result;
-
-    if (!article || !article.content) {
-      console.error('Failed to extract article content');
-      return;
-    }
-
-    // Store the article in session storage with the original URL
-    await chrome.storage.session.set({
-      currentArticle: {
-        ...article,
-        sourceUrl: tab.url,
-        sourceFavicon: tab.favIconUrl
-      }
-    });
-
-    // Open the reader view in a new tab with the original URL as query parameter
-    // This helps with referrer policies for loading external images
-    const readerUrl = new URL(chrome.runtime.getURL('reader.html'));
-    readerUrl.searchParams.set('url', tab.url);
-    
-    chrome.tabs.create({
-      url: readerUrl.toString()
-    });
-
+    await openReaderViewForTab(tab);
   } catch (error) {
     console.error('Error extracting article:', error);
   }

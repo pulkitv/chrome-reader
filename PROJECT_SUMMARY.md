@@ -1,5 +1,47 @@
 # ReadEasy Chrome Extension — Project Summary
 
+---
+
+## 📋 Documentation Maintenance Rules (Read Before Editing This File)
+
+> **This section is mandatory reading for any human or AI agent that edits this document.**
+> These rules exist to ensure this file always functions as a reliable, self-contained quick-start reference that any new CLI agent can read to orient themselves and immediately continue work.
+
+### Purpose of This File
+
+This file is the **quick-orientation companion** to `PROJECT_ARCHITECTURE.md`. It is written so that a new agent — with no prior conversation context — can read it in under five minutes and:
+1. Know what the extension does and what its major features are
+2. Know the full chronological history of what was built and when
+3. Know the current operational contracts that must be preserved
+4. Know the invariants and assumptions the next agent should carry forward
+5. Run through the fast handoff checklist to verify nothing is broken before starting new work
+
+> For a full deep-dive (message flows, storage schema, implementation patterns, function references), read `PROJECT_ARCHITECTURE.md`.
+
+### Rules for Updating This File
+
+1. **Update on every feature completion** — After implementing any user-facing feature or significant architectural change, update the `What exists right now` section and the `Chronological progression` section.
+
+2. **Keep `What exists right now` truthful** — This section describes the current state of the codebase, not aspirations. Only include things that are actually implemented and working.
+
+3. **Append to chronological progression, never rewrite** — Each implementation session should add a new dated entry. Do not edit past entries. Agents reading this file later need the history to understand why things are the way they are.
+
+4. **Keep operational contracts accurate** — The `Current operational contracts` section must list every active message action, storage key contract, and data flow contract. Update it whenever contracts change.
+
+5. **Update invariants when design decisions are locked** — The `If another agent continues from here, it should assume` section documents deliberate design constraints. Add entries whenever a decision is made that future agents must not override.
+
+6. **Update the handoff checklist after every change** — Add a new checklist item for every behavior that must be verified before the next agent starts work. Never remove checklist items — only add them.
+
+7. **Update `Last updated` date** — Update the date stamp at the bottom of the canonical snapshot every time this file is edited.
+
+8. **Keep File Map and Storage Keys Reference current** — The `File Map` and `Storage Keys Reference` sections must match the actual repository state. If a file is added, renamed, or repurposed, update the map.
+
+9. **Both files are paired** — `PROJECT_SUMMARY.md` (quick orientation) and `PROJECT_ARCHITECTURE.md` (deep-dive) must be updated together. They must not contradict each other. If the summary says one thing and the architecture doc says another, the architecture doc is authoritative.
+
+10. **Resolve conflicts in favor of the most recent canonical snapshot** — If any older section below conflicts with the latest canonical snapshot, trust the snapshot. Do not delete the older section — add a note instead.
+
+---
+
 ## April 17, 2026 — Agent-Oriented Executive Summary (Canonical)
 
 Use this section as the primary source of truth when loading this project into a separate CLI agent.
@@ -29,7 +71,7 @@ Use this section as the primary source of truth when loading this project into a
 
 6. **Floating launcher now exists across webpages**
    - A draggable floating ReadEasy launcher is injected on regular websites
-   - Clicking it opens the Chrome side panel
+   - Clicking it opens a two-option menu: **Switch to reading view** or **Open side panel**
    - Position is persisted across pages
 
 7. **Side panel now has a settings menu**
@@ -37,6 +79,12 @@ Use this section as the primary source of truth when loading this project into a
    - Menu opens a dedicated in-panel Settings page
    - Settings currently include `ReadEasy Floater` enabled/disabled control
    - Default state is enabled
+
+8. **Optional Google sign-in is implemented**
+    - Side panel header now includes guest/avatar auth icon
+    - Sign-in uses `chrome.identity.getAuthToken()` + Google profile fetch
+    - Auth state persists in `chrome.storage.sync.authState`
+    - Access token remains in service-worker memory only
 
 ---
 
@@ -74,6 +122,14 @@ Use this section as the primary source of truth when loading this project into a
 - Added sidepanel header menu and Settings page
 - Added synced `ReadEasy Floater` setting controlling launcher visibility across tabs/pages
 
+#### April 17, 2026 follow-up reliability + auth additions
+- Added sidepanel Google sign-in/sign-out (guest/avatar state)
+- Added background auth actions: `authSignIn`, `authGetState`, `authSignOut`
+- Added shared `openReaderViewForTab` flow so toolbar and floater “Switch to reading view” use same extraction path
+- Updated floater click to open two-option menu instead of direct sidepanel open
+- Fixed launcher menu initial top-left auto-open regression after page refresh
+- Added background tab-wide rebroadcast (`floaterSettingChanged`) so disabling floater applies immediately across open tabs
+
 ---
 
 ### Current operational contracts
@@ -91,7 +147,12 @@ Use this section as the primary source of truth when loading this project into a
 4. **Floating launcher control path**
    - `selection.js` reads synced `floatingButtonEnabled`
    - sidepanel settings writes `floatingButtonEnabled`
-   - open tabs update live via `chrome.storage.onChanged`
+   - open tabs update live via `chrome.storage.onChanged` plus background rebroadcast (`floaterSettingChanged`) for reliability
+
+5. **Auth control path**
+    - sidepanel sends `authSignIn` / `authGetState` / `authSignOut`
+    - background manages token + Google profile fetch + normalized `authState` persistence
+    - sidepanel updates via `authUpdated` message and `chrome.storage.sync` state
 
 ---
 
@@ -102,7 +163,8 @@ Use this section as the primary source of truth when loading this project into a
 3. Add-to-List plus-button behavior should remain functionally equivalent to old Add-to-List
 4. Merged EPUB should include both full articles and saved highlighted selections
 5. Floating launcher visibility must remain controlled by synced settings, default enabled
-6. Launcher position persistence must remain independent of enable/disable state
+6. Floater click behavior should remain menu-based (reading view + side panel) and drag-safe
+7. Launcher position persistence must remain independent of enable/disable state
 
 ---
 
@@ -113,8 +175,10 @@ Use this section as the primary source of truth when loading this project into a
 - Confirm multiple selections from same page are saved as separate entries
 - Confirm merged EPUB includes these entries
 - Confirm floating launcher appears on regular webpages by default
+- Confirm floating launcher menu opens with both actions and positions near launcher
 - Confirm disabling `ReadEasy Floater` from settings hides launcher immediately
 - Confirm re-enabling restores launcher without needing reinstall
+- Confirm auth sign-in/out state persists and header icon updates correctly
 
 ---
 
@@ -140,12 +204,13 @@ The side panel also supports **Merge & Send to X4**: it generates a merged EPUB,
 chrome-extension/
 │
 ├── manifest.json           MV3 config — permissions, side_panel, declarativeNetRequest,
-│                           content scripts, web-accessible icon asset, CSP
+│                           identity + oauth2, content scripts, web-accessible icon asset, CSP
 ├── background.js           Service worker — toolbar click → reader tab, IndexedDB CRUD,
-│                           saveToReadingList / deleteFromList handlers, context menu
+│                           save/delete/title-update handlers, openReaderView/openSidePanel,
+│                           auth handlers, floater rebroadcast, context menu
 ├── content.js              Injected content script — Readability extraction, URL normalisation
 ├── selection.js            Declarative content script — Save Selection responder,
-│                           floating launcher render/drag/open-sidepanel logic
+│                           floating launcher render/drag/two-option menu logic
 ├── db.js                   IndexedDB wrapper (Promise-based) — used by sidepanel.js
 │
 ├── reader.html             Reader view UI
@@ -156,7 +221,7 @@ chrome-extension/
 ├── sidepanel.html          Side panel UI — Save Selection, current article card,
 │                           reading list, overflow menu, settings page
 ├── sidepanel.js            ~940 lines — list render, add/remove, Save Selection,
-│                           inline title edit, EPUB merge, tab detection,
+│                           inline title edit, auth UI/state, EPUB merge, tab detection,
 │                           floater settings persistence, storage listeners
 ├── sidepanel.css           Side panel styles — cards, compact add button, menu,
 │                           settings page, inline title editor, toasts
@@ -182,7 +247,7 @@ chrome-extension/
 - **Content Extraction:** Mozilla Readability.js
 - **EPUB Generation:** JSZip
 - **Storage:** IndexedDB (article HTML), chrome.storage.local (metadata), chrome.storage.session (article data bus), chrome.storage.sync (user prefs)
-- **Permissions:** `activeTab`, `scripting`, `storage`, `declarativeNetRequest`, `sidePanel`, `contextMenus`, `host_permissions: ["<all_urls>"]`
+- **Permissions:** `activeTab`, `scripting`, `storage`, `identity`, `declarativeNetRequest`, `sidePanel`, `contextMenus`, `host_permissions: ["<all_urls>"]`
 
 ---
 
@@ -224,9 +289,19 @@ chrome-extension/
 1. `selection.js` runs declaratively on regular webpages
 2. It reads synced `floatingButtonEnabled` and `floatingButtonPosition`
 3. If enabled, it renders a draggable floating launcher using the extension icon
-4. Clicking launcher requests side panel open via background message path
+4. Clicking launcher opens a menu:
+   - **Switch to reading view** → `openReaderView`
+   - **Open side panel** → `openSidePanel`
 5. Side panel Settings page writes `floatingButtonEnabled`
-6. Open tabs react immediately through `chrome.storage.onChanged`
+6. Open tabs react through `chrome.storage.onChanged` and background rebroadcast (`floaterSettingChanged`) so all tabs update immediately
+
+### Google sign-in (side panel)
+1. User clicks sidepanel auth icon (guest/avatar)
+2. sidepanel sends `authSignIn` to background
+3. background acquires token with `chrome.identity.getAuthToken({ interactive: true })`
+4. background fetches user profile from Google and stores normalized `authState` in sync storage
+5. sidepanel refreshes auth UI from `authUpdated` runtime message and storage updates
+6. Sign-out clears cached token(s), resets state, and updates all open sidepanel UIs
 
 ### Merged EPUB export
 1. User clicks "Merge & Download EPUB" in side panel
@@ -272,8 +347,9 @@ chrome-extension/
 | Email EPUB | `reader.js` | mailto: link with base64 EPUB |
 | Reading List | `sidepanel.js` + `background.js` | Up to 10 articles, images embedded as PNG data URIs |
 | Save Selection | `sidepanel.js` + `selection.js` + `background.js` | Sidepanel-driven highlighted-text save flow, non-intrusive replacement for old page marker |
-| Floating launcher | `selection.js` + `background.js` | Draggable webpage launcher opens side panel, position persisted across pages |
+| Floating launcher | `selection.js` + `background.js` | Draggable webpage launcher opens click-menu (reading view / side panel), position persisted across pages |
 | Floater settings UI | `sidepanel.html/js/css` | 3-dot menu → Settings page → synced `ReadEasy Floater` toggle |
+| Google sign-in | `sidepanel.html/js/css` + `background.js` | Optional Google auth, guest/avatar UI, sync-stored normalized auth state |
 | Inline title editing | `sidepanel.js` + `background.js` | Pencil icon on saved cards, inline input, Save/Cancel, persisted to metadata + IndexedDB |
 | Merged EPUB | `sidepanel.js` | Multi-chapter, image dedup, valid XHTML, EPUB 2+3 nav |
 | Merge & Send to X4 | `sidepanel.html/js/css` | Modal flow, connection check, upload, response preview, optional image exclusion with guarded async regeneration |
@@ -293,6 +369,7 @@ chrome-extension/
 | `sync` | `readerPreferences` | `{ theme, fontSize, wideWidth }` |
 | `sync` | `floatingButtonEnabled` | Floater visibility toggle, default `true` |
 | `sync` | `floatingButtonPosition` | Persisted draggable launcher position |
+| `sync` | `authState` | `{ isSignedIn, provider, profile { email, name, picture }, lastSignInAt }` |
 | IndexedDB | `savedArticles` | `{ id, title, url, siteName, addedDate, htmlContent }` |
 
 ---
@@ -358,19 +435,23 @@ chrome-extension/
 - Send/Download buttons are disabled only during latest regeneration
 - If regeneration fails, previous valid EPUB blob is preserved and user gets a non-blocking toast
 
-### April 17, 2026 — Floating Launcher + Side Panel Settings
+### April 17, 2026 — Floating Launcher + Side Panel Settings + Auth
 - Added a draggable floating launcher to regular webpages via `selection.js`
 - Exposed launcher icon through manifest web-accessible resources so it renders inside page context
 - Changed default launcher placement to bottom-left and increased icon size for better visibility
 - Added fallback launcher label when image asset fails to load
 - Added side panel 3-dot overflow menu and dedicated Settings page
 - Added synced `ReadEasy Floater` setting controlling launcher visibility across open tabs
+- Changed floater click behavior to two-option menu (`openReaderView` / `openSidePanel`)
+- Fixed menu default-visibility regression that showed options at top-left on refresh
+- Added background rebroadcast for floater setting updates across all open tabs
+- Added sidepanel Google sign-in and sign-out with auth icon, profile dropdown, and normalized sync state
 
 ---
 
 ## Next Steps / Known Gaps
 
-- [ ] Login / cloud sync for reading list (planned next phase)
+- [ ] Cloud sync of actual reading list content (auth exists, list sync not implemented)
 - [ ] Reader mode auto-detection (suggest reader when landing on article)
 - [ ] Annotations and highlighting
 - [ ] Print stylesheet
@@ -403,6 +484,7 @@ This historical note is retained for chronology only.
 - Post-`b893cfb` — Architecture shift: removed floating marker, moved selection save to sidepanel-driven flow via `getSelectedHTML`
 - `d454174` — UX/state polish: compact plus add button + persistent Save Selection behavior and visibility decoupling from current-article card lifecycle
 - April 17 follow-up — draggable webpage launcher + sidepanel Settings page + synced `ReadEasy Floater` control
+- April 17 latest — floater click menu (`openReaderView` / `openSidePanel`), refresh/menu visibility fix, cross-tab floater rebroadcast, sidepanel Google auth
 
 ### Quick verification checklist for continuation work
 
@@ -411,6 +493,8 @@ This historical note is retained for chronology only.
 - [ ] Multiple selections from same source page save as distinct items (`#highlight-<timestamp>`)
 - [ ] Merged EPUB contains both full saved articles and saved highlighted selections
 - [ ] `listUpdated` + `chrome.storage.onChanged` keep sidepanel state in sync
-- [ ] Floating launcher appears on regular webpages by default and opens the side panel
+- [ ] Floating launcher appears on regular webpages by default and opens click-menu actions (reading view + side panel)
 - [ ] Disabling `ReadEasy Floater` hides launcher immediately; re-enabling restores it
+- [ ] Floater toggle update applies across already-open tabs without requiring page refresh
+- [ ] Sign-in icon (guest/avatar) and auth dropdown behavior are correct after panel reopen
 - [ ] Internal/unsupported pages (`chrome://`, extension pages) correctly hide Save Selection

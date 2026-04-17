@@ -4,7 +4,8 @@
 
 - [ ] Extension loads without errors in `chrome://extensions/`
 - [ ] Extension icon appears in toolbar
-- [ ] No console errors in background page
+- [ ] No console errors in background service worker
+- [ ] Side panel opens successfully
 
 ## Basic Functionality
 
@@ -14,6 +15,8 @@
 - [ ] Article content is extracted and readable
 - [ ] Images are displayed (if present in original)
 - [ ] Original page link works
+- [ ] Reader opens from floating launcher menu action (**Switch to reading view**)
+- [ ] Side panel opens from floating launcher menu action (**Open side panel**)
 
 ## Theme Tests
 
@@ -79,6 +82,35 @@
 - [ ] Cannot run on chrome:// pages
 - [ ] Cannot run on extension pages
 
+## Side Panel & Reading List
+
+- [ ] Side panel shows current article card on `reader.html`
+- [ ] Side panel shows Save Selection section on regular `http/https` pages
+- [ ] Add to List from reader tab works
+- [ ] Add to List from regular webpage tab works
+- [ ] Save Selection stores highlighted text as a new reading-list item
+- [ ] Repeated Save Selection from same page creates unique entries
+- [ ] Inline title edit (pencil icon) updates card title and persists
+- [ ] Remove from list works and refreshes UI
+- [ ] Reading list cap behavior (10 items) evicts oldest item
+
+## Floating Launcher & Settings
+
+- [ ] Floater appears by default on regular webpages
+- [ ] Floater is draggable and position persists after refresh/tab switch
+- [ ] Floater click opens menu near launcher (not top-left)
+- [ ] Menu closes on outside click and `Esc`
+- [ ] Disable `ReadEasy Floater` in side panel settings hides launcher immediately on open tabs
+- [ ] Re-enable `ReadEasy Floater` restores launcher immediately on open tabs
+
+## Auth (Optional Google Sign-In)
+
+- [ ] Signed-out state shows guest icon
+- [ ] Sign-in flow opens Google auth and returns to signed-in avatar state
+- [ ] Auth dropdown shows profile name/email/avatar
+- [ ] Sign-out resets to guest state
+- [ ] Auth state persists after side panel reopen
+
 ## Keyboard Shortcuts
 
 - [ ] ESC closes reader view
@@ -113,6 +145,14 @@
 - [ ] Single-page application
 - [ ] Paywall page (should show available content)
 
+## Merge & Export Flows
+
+- [ ] Merge & Download EPUB opens filename modal before download
+- [ ] Download from modal produces merged EPUB
+- [ ] Merge & Send to X4 opens send-mode modal
+- [ ] Exclude Images toggle regenerates file size and keeps UI responsive
+- [ ] Send to X4 handles connection check and upload response states
+
 ## Performance Tests
 
 - [ ] Extraction completes quickly (< 2 seconds)
@@ -135,6 +175,7 @@
 - [ ] iframes are converted to links or removed
 - [ ] No XSS vulnerabilities
 - [ ] No console errors about CSP violations
+- [ ] Google auth token is not persisted in storage (in-memory only)
 
 ## Cleanup
 
