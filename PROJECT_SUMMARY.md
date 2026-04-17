@@ -87,9 +87,13 @@ Use this section as the primary source of truth when loading this project into a
     - Access token remains in service-worker memory only
 
 9. **Feedback collection links are now surfaced in-product**
-   - Reader top navigation now shows a **Feedback** CTA (replacing the old Merge EPUBs external link)
+   - Reader top navigation now shows a **Feedback** CTA alongside the restored **Merge EPUBs** shortcut
    - Side panel footer now includes **Share feedback & ideas**
    - Both open `https://readeasy.featurebase.app/` in a new tab
+
+10. **Reader toolbar merge shortcut is restored**
+   - The top navigation no longer uses **Download EPUB** in that slot
+   - **Merge EPUBs** is back in the reader header and opens the external merge service
 
 ---
 
@@ -136,9 +140,14 @@ Use this section as the primary source of truth when loading this project into a
 - Added background tab-wide rebroadcast (`floaterSettingChanged`) so disabling floater applies immediately across open tabs
 
 #### April 17, 2026 follow-up feedback channel additions
-- Replaced reader header **Merge EPUBs** external shortcut with **Feedback**
+- Added reader header **Feedback** CTA
 - Added side panel footer **Share feedback & ideas** link
 - Standardized both links to `https://readeasy.featurebase.app/`
+
+#### April 17, 2026 reader toolbar follow-up
+- Removed the reader header **Download EPUB** button from the top navigation slot
+- Restored **Merge EPUBs** in the reader header
+- Reader top navigation now includes both **Merge EPUBs** and **Feedback**
 
 ---
 
@@ -168,6 +177,10 @@ Use this section as the primary source of truth when loading this project into a
    - Reader and side panel feedback CTAs are static anchors to `https://readeasy.featurebase.app/`
    - No extension runtime message or article payload is sent by these CTA clicks
 
+7. **Reader Merge EPUB path (external navigation only)**
+   - Reader header **Merge EPUBs** opens `https://merge-epubs.vercel.app/`
+   - No article payload is automatically posted by that click
+
 ---
 
 ### If another agent continues from here, it should assume
@@ -180,6 +193,7 @@ Use this section as the primary source of truth when loading this project into a
 6. Floater click behavior should remain menu-based (reading view + side panel) and drag-safe
 7. Launcher position persistence must remain independent of enable/disable state
 8. Feedback CTAs should continue to point to the Featurebase portal unless intentionally changed
+9. Reader header should continue exposing **Merge EPUBs** alongside **Feedback** unless product direction changes
 
 ---
 
@@ -195,6 +209,7 @@ Use this section as the primary source of truth when loading this project into a
 - Confirm re-enabling restores launcher without needing reinstall
 - Confirm auth sign-in/out state persists and header icon updates correctly
 - Confirm reader/sidepanel feedback links open `https://readeasy.featurebase.app/`
+- Confirm reader header **Merge EPUBs** opens `https://merge-epubs.vercel.app/`
 
 ---
 
@@ -350,6 +365,11 @@ chrome-extension/
 2. Browser opens `https://readeasy.featurebase.app/` in a new tab
 3. No article HTML/content payload is posted by this action
 
+### Reader Merge EPUB shortcut
+1. User clicks **Merge EPUBs** in reader top navigation
+2. Browser opens `https://merge-epubs.vercel.app/` in a new tab
+3. No article HTML/content payload is posted by this action
+
 ---
 
 ## Key Features
@@ -375,6 +395,7 @@ chrome-extension/
 | Merged EPUB | `sidepanel.js` | Multi-chapter, image dedup, valid XHTML, EPUB 2+3 nav |
 | Merge & Send to X4 | `sidepanel.html/js/css` | Modal flow, connection check, upload, response preview, optional image exclusion with guarded async regeneration |
 | Feedback collection links | `reader.html` + `sidepanel.html` | Reader header **Feedback** + side panel footer **Share feedback & ideas** open Featurebase portal |
+| Reader Merge EPUB shortcut | `reader.html` + `reader.js` | Reader header **Merge EPUBs** opens external merge web app |
 | CDN image fix | `rules.json` | declarativeNetRequest sets Referer for Substack, Medium |
 | Keyboard shortcuts | `reader.js` | F, Space, R, +/−, Esc |
 
@@ -470,9 +491,14 @@ chrome-extension/
 - Added sidepanel Google sign-in and sign-out with auth icon, profile dropdown, and normalized sync state
 
 ### April 17, 2026 — Feedback Link Surfacing (Reader + Side Panel)
-- Replaced reader header external **Merge EPUBs** shortcut with **Feedback**
+- Added reader header **Feedback** CTA
 - Added side panel footer **Share feedback & ideas** CTA
 - Both links now route users to `https://readeasy.featurebase.app/` for feedback and feature requests
+
+### April 17, 2026 — Reader Toolbar Merge Shortcut Restored
+- Removed **Download EPUB** from the reader top navigation slot
+- Restored **Merge EPUBs** in the reader top navigation
+- Reader header now contains both **Merge EPUBs** and **Feedback**
 
 ---
 
@@ -513,6 +539,7 @@ This historical note is retained for chronology only.
 - April 17 follow-up — draggable webpage launcher + sidepanel Settings page + synced `ReadEasy Floater` control
 - April 17 latest — floater click menu (`openReaderView` / `openSidePanel`), refresh/menu visibility fix, cross-tab floater rebroadcast, sidepanel Google auth
 - April 17 latest+ — reader/sidepanel Featurebase feedback CTA links added (`https://readeasy.featurebase.app/`)
+- April 17 latest++ — reader toolbar restored external **Merge EPUBs** shortcut (`https://merge-epubs.vercel.app/`)
 
 ### Quick verification checklist for continuation work
 
@@ -527,3 +554,4 @@ This historical note is retained for chronology only.
 - [ ] Sign-in icon (guest/avatar) and auth dropdown behavior are correct after panel reopen
 - [ ] Internal/unsupported pages (`chrome://`, extension pages) correctly hide Save Selection
 - [ ] Reader and sidepanel feedback CTAs open Featurebase feedback portal
+- [ ] Reader header Merge EPUBs opens the external merge web app

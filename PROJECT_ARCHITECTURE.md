@@ -98,7 +98,7 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
   - Access token is memory-only in service worker (not persisted)
 
 9. **Feedback collection links are now exposed in both primary UIs**
-  - Reader header includes a **Feedback** CTA (replacing the older external Merge EPUB shortcut)
+  - Reader header includes a **Feedback** CTA alongside the restored external **Merge EPUBs** shortcut
   - Side panel footer includes **Share feedback & ideas**
   - Both route to `https://readeasy.featurebase.app/` in a new tab
 
@@ -156,9 +156,14 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - Added background broadcast (`floaterSettingChanged`) so floater enable/disable updates all open tabs immediately
 
 #### Phase K — Feedback channel surfacing
-- Replaced reader header external **Merge EPUBs** shortcut with **Feedback**
+- Added reader header **Feedback** CTA
 - Added side panel footer **Share feedback & ideas** link
 - Standardized both feedback CTAs to `https://readeasy.featurebase.app/`
+
+#### Phase L — Reader toolbar shortcut adjustment
+- Removed the reader header **Download EPUB** button from the top navigation
+- Restored the external **Merge EPUBs** shortcut in the reader header
+- Reader header now exposes both **Merge EPUBs** and **Feedback** actions
 
 ---
 
@@ -272,6 +277,7 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - **Merge & Send to X4** — generate merged EPUB in side panel modal and upload to LAN device
 - **Optional image-free X4 EPUB mode** — checkbox-triggered regeneration with live file-size update
 - **Feedback collection links** — Reader + side panel CTAs route users to Featurebase feedback portal
+- **Reader toolbar merge shortcut** — Reader header includes external **Merge EPUBs** shortcut (`https://merge-epubs.vercel.app/`)
 - Single-article EPUB and HTML download from reader view
 
 **Tech Stack:** Vanilla JS, Chrome Extension APIs (MV3), Mozilla Readability.js, JSZip
@@ -307,6 +313,7 @@ User Click
 [5] reader.html / reader.js / reader.css
     │  renders article
     │  Flash It, TTS, export
+  │  Reader header Merge EPUBs shortcut → external merge web app
   │  Reader header Feedback CTA → Featurebase portal
     │  "Add to List" button → fetchImageAsPng → saveToReadingList message
     ▼

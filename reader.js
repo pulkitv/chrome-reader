@@ -223,9 +223,9 @@ function setupEventListeners() {
     openDownloadModal();
   });
 
-  // Download EPUB button
-  document.getElementById('downloadEpubBtn').addEventListener('click', () => {
-    downloadArticleEPUB();
+  // Merge EPUB button
+  document.getElementById('mergeEpubBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://merge-epubs.vercel.app/' });
   });
 
   // Email EPUB button

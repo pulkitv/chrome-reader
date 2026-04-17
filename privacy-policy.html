@@ -29,6 +29,8 @@
 
   <p>When you click <strong>"Beta View"</strong>, the current article's HTML and styling are sent to the web app URL you choose to open. This is an explicit user action; no data is sent automatically.</p>
 
+  <p>When you click <strong>"Merge EPUBs"</strong> in the reader header, your browser opens <code>https://merge-epubs.vercel.app/</code> in a new tab. ReadEasy does not attach article content to this action automatically.</p>
+
   <p>When you click <strong>"Feedback"</strong> or <strong>"Share feedback &amp; ideas"</strong>, your browser opens <code>https://readeasy.featurebase.app/</code> in a new tab. ReadEasy does not attach article content to this action automatically.</p>
 
 
@@ -56,6 +58,7 @@
     <li><strong>"Beta View"</strong> — article HTML and CSS are sent via <code>postMessage</code> to the web app you open. You can disable this feature by not using the Beta View button.</li>
     <li><strong>Download EPUB / HTML</strong> — files are saved to your device's downloads folder</li>
     <li><strong>Email EPUB</strong> — opens your default email client via a <code>mailto:</code> link; the EPUB is attached client-side</li>
+    <li><strong>"Merge EPUBs"</strong> — opens <code>https://merge-epubs.vercel.app/</code> in a new tab. Any content you submit there is provided directly by you on that website.</li>
     <li><strong>"Merge & Send to X4"</strong> — EPUB files are sent via HTTP POST to a user-specified local IP address (e.g., 192.168.1.11) on your local network for device integration. No data is transmitted to external servers.</li>
     <li><strong>Google sign-in</strong> — when you explicitly choose to sign in, authentication requests are sent to Google endpoints required by Chrome identity APIs to obtain your account profile for extension state.</li>
     <li><strong>Feedback portal</strong> — clicking reader/side panel feedback links opens <code>https://readeasy.featurebase.app/</code>. Any data submitted there is provided directly by you on that website.</li>
