@@ -44,11 +44,11 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 
 ---
 
-> ## April 17, 2026 — Canonical Agent Handoff Update (Read This First)
+> ## April 18, 2026 — Canonical Agent Handoff Update (Read This First)
 >
 > This section supersedes older historical notes below and is intended for new CLI agents (for example, Anti-Gravity-like workflows) that need a reliable chronological understanding of what has already been implemented.
 
-### Current Architecture Snapshot (as of latest local April 17 state)
+### Current Architecture Snapshot (as of latest local April 18 state)
 
 1. **Core extraction path remains unchanged**
   - `background.js` injects `libs/Readability.js` + `content.js`
@@ -73,9 +73,9 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
   - Save Selection visibility is controlled independently from current-card reset logic
 
 5. **EPUB merge path remains central in sidepanel**
-  - `sidepanel.js` loads full articles from IndexedDB
+  - Sidepanel X4/EPUB modules load full articles from IndexedDB
   - Generates merged EPUB with chapter files and image dedup strategy
-  - X4 modal flow still supported with image-included / image-excluded generation modes
+  - X4 modal flow still supports image-included / image-excluded generation modes
 
 6. **Floating launcher architecture now exists on webpages**
   - `selection.js` renders a draggable floating launcher on regular websites
@@ -102,9 +102,15 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
   - Side panel footer includes **Share feedback & ideas**
   - Both route to `https://readeasy.featurebase.app/` in a new tab
 
+10. **Side panel logic is now modularized into ES modules**
+  - `sidepanel.js` is now a thin entry-point + event wiring layer
+  - Business logic moved into `sidepanel/*.js` modules (`auth`, `settings`, `tab-detection`, `reading-list-*`, `epub-build`, `x4-modal`, `utils`, `state`)
+  - Shared mutable state is centralized in `sidepanel/state.js`
+  - `sidepanel.html` now loads sidepanel with `type="module"` while keeping `db.js` and `libs/jszip.min.js` as globals loaded first
+
 ---
 
-### Chronological Timeline (Accurate Through April 17, 2026)
+### Chronological Timeline (Accurate Through April 18, 2026)
 
 #### Phase A — Foundation
 - **`0375d98`**: Initial extension architecture established (reader, extraction, save paths, EPUB basis)
@@ -164,6 +170,13 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - Removed the reader header **Download EPUB** button from the top navigation
 - Restored the external **Merge EPUBs** shortcut in the reader header
 - Reader header now exposes both **Merge EPUBs** and **Feedback** actions
+
+#### Phase M — Sidepanel modularization and ES-module migration
+- **`3513076`**: Refactored monolithic sidepanel into module set under `sidepanel/`
+- Added shared state store (`sidepanel/state.js`) for cross-module mutable state
+- Moved EPUB generation into `sidepanel/epub-build.js` and X4 modal orchestration into `sidepanel/x4-modal.js`
+- Converted sidepanel boot script to module entry-point in `sidepanel.js`
+- Updated `sidepanel.html` script tag to `type="module"` while preserving global load order for `db.js` and `jszip.min.js`
 
 ---
 
@@ -226,6 +239,7 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - [ ] Multiple sequential Save Selection operations from same page create distinct saved entries
 - [ ] Merged EPUB includes those selection entries
 - [ ] Sidepanel updates correctly on `listUpdated` + storage changes
+- [ ] Sidepanel opens without module import/runtime errors after `type="module"` migration
 - [ ] Floating launcher appears by default on regular webpages
 - [ ] Floating launcher menu opens on click and offers both actions (reading view + side panel)
 - [ ] Floating launcher can be dragged and preserves position
@@ -235,11 +249,11 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 
 ---
 
-> If there is any conflict between older sections below and this April 17 update, treat this update as canonical.
+> If there is any conflict between older sections below and this April 18 update, treat this update as canonical.
 
 > **Purpose**: Comprehensive reference for AI coding assistants and developers. Read this file first in any new chat — it describes every component, data flow, storage scheme, and key implementation decision in the current codebase.
 
-> **Last Updated**: April 17, 2026
+> **Last Updated**: April 18, 2026
 
 ---
 
@@ -321,7 +335,7 @@ User Click
     │  full HTML with base64 images in IndexedDB
     │  lightweight metadata array in chrome.storage.local
     ▼
-[7] sidepanel.html / sidepanel.js / sidepanel.css
+[7] sidepanel.html / sidepanel.js / sidepanel/*.js / sidepanel.css
     │  reading list display
   │  Save Selection + compact current-article add button
   │  inline title edit (pencil icon + in-card input)
@@ -430,7 +444,7 @@ chrome-extension/
 ├── content.js               Injected content script — Readability extraction, URL normalisation
 ├── selection.js             Declarative content script — Save Selection responder,
 │                            floating launcher render/drag/menu logic
-├── db.js                    IndexedDB wrapper used by sidepanel.js — Promise-based CRUD,
+├── db.js                    IndexedDB wrapper used by sidepanel modules — Promise-based CRUD,
 │                            includes title update helper
 │
 ├── reader.html              Reader view UI (214 lines)
@@ -442,11 +456,17 @@ chrome-extension/
 ├── sidepanel.html           Side panel UI — Save Selection section, current article card,
 │                            reading list, overflow menu, Settings page, storage info,
 │                            footer feedback link
-├── sidepanel.js             Side panel logic (~940 lines) — list render, add/remove,
-│                            Save Selection, compact add button, auth UI/state,
-│                            floater settings persistence,
-│                            guarded async regeneration, fetchImageAsPng, tab detection,
-│                            storage change listeners
+├── sidepanel.js             Side panel ES-module entry-point — boot + event wiring
+├── sidepanel/               Side panel modular logic (flat module folder)
+│   ├── state.js             Shared mutable state + sidepanel constants
+│   ├── utils.js             Shared helpers (toast, escaping, file-size, blob download)
+│   ├── auth.js              Sign-in/sign-out flow, auth UI state normalization
+│   ├── settings.js          Header menu/settings page/floater toggle wiring
+│   ├── tab-detection.js     Active-tab classification + Save Selection visibility logic
+│   ├── reading-list-add.js  Add-to-list/save-selection ingestion + image fetch/PNG conversion
+│   ├── reading-list-render.js  Reading-list render, inline edit/remove, storage indicator
+│   ├── epub-build.js        Merged EPUB/XHTML generation + packaging helpers
+│   └── x4-modal.js          Merge orchestration + X4 modal regeneration/check/send/download
 ├── sidepanel.css            Side panel styles — card layout, compact add button, menu,
 │                            settings page, inline editor, X4 modal, toasts, themes
 │
@@ -531,7 +551,7 @@ For the webpage launcher, floater enablement and launcher position are deliberat
 
 ### 2. Image Embedding Pipeline (shared pattern)
 
-Both `reader.js` and `sidepanel.js` use identical `fetchImageAsPng(url)` helpers.
+Both `reader.js` and `sidepanel/reading-list-add.js` use identical `fetchImageAsPng(url)` helpers.
 
 ```javascript
 async function fetchImageAsPng(url) {
@@ -590,7 +610,7 @@ X4 modal state in sidepanel includes:
 - `x4RegenRequestId` and `x4LatestSettledRequestId` for latest-toggle-wins semantics
 - `x4RegenInFlight` to gate Send/Download buttons only during active regeneration
 
-### 5. Merged EPUB Generation (`sidepanel.js` — `generateMergedEPUB`)
+### 5. Merged EPUB Generation (`sidepanel/epub-build.js` — `buildMergedEPUBBlob`)
 
 **Key design decisions:**
 
@@ -1178,5 +1198,5 @@ else displayTime *= 1.5;                       // Very long
 
 ---
 
-**End of Document** - Last updated: April 17, 2026
+**End of Document** - Last updated: April 18, 2026
 

@@ -42,7 +42,7 @@ This file is the **quick-orientation companion** to `PROJECT_ARCHITECTURE.md`. I
 
 ---
 
-## April 17, 2026 — Agent-Oriented Executive Summary (Canonical)
+## April 18, 2026 — Agent-Oriented Executive Summary (Canonical)
 
 Use this section as the primary source of truth when loading this project into a separate CLI agent.
 
@@ -94,6 +94,12 @@ Use this section as the primary source of truth when loading this project into a
 10. **Reader toolbar merge shortcut is restored**
    - The top navigation no longer uses **Download EPUB** in that slot
    - **Merge EPUBs** is back in the reader header and opens the external merge service
+
+11. **Side panel architecture is now modularized**
+   - `sidepanel.js` is now a thin ES-module entry-point
+   - Core sidepanel logic is split across `sidepanel/*.js` modules (auth, settings, tab detection, list add/render, EPUB build, X4 modal, utils, state)
+   - Shared mutable sidepanel state now lives in `sidepanel/state.js`
+   - `sidepanel.html` now loads `sidepanel.js` with `type="module"` while `db.js` + `jszip.min.js` remain preloaded globals
 
 ---
 
@@ -149,6 +155,12 @@ Use this section as the primary source of truth when loading this project into a
 - Restored **Merge EPUBs** in the reader header
 - Reader top navigation now includes both **Merge EPUBs** and **Feedback**
 
+#### April 18, 2026 sidepanel modularization follow-up
+- `3513076`: Split monolithic sidepanel into ES modules under `sidepanel/`
+- Added shared state store (`sidepanel/state.js`) for pending X4 state, tab state, auth state, and constants
+- Moved EPUB build logic to `sidepanel/epub-build.js` and X4 orchestration to `sidepanel/x4-modal.js`
+- Kept `db.js` and `libs/jszip.min.js` as global scripts loaded before module entry-point
+
 ---
 
 ### Current operational contracts
@@ -203,6 +215,7 @@ Use this section as the primary source of truth when loading this project into a
 - Confirm Add-to-List click does not permanently hide Save Selection
 - Confirm multiple selections from same page are saved as separate entries
 - Confirm merged EPUB includes these entries
+- Confirm sidepanel opens cleanly after ES-module split (no import/runtime errors)
 - Confirm floating launcher appears on regular webpages by default
 - Confirm floating launcher menu opens with both actions and positions near launcher
 - Confirm disabling `ReadEasy Floater` from settings hides launcher immediately
@@ -213,11 +226,11 @@ Use this section as the primary source of truth when loading this project into a
 
 ---
 
-> If older sections below conflict with this April 17 summary, trust this section first.
+> If older sections below conflict with this April 18 summary, trust this section first.
 
 > **For AI assistants:** Read `PROJECT_ARCHITECTURE.md` for a full deep-dive. This file is a quick orientation.
 
-> **Last updated:** April 17, 2026
+> **Last updated:** April 18, 2026
 
 ---
 
@@ -242,7 +255,7 @@ chrome-extension/
 ├── content.js              Injected content script — Readability extraction, URL normalisation
 ├── selection.js            Declarative content script — Save Selection responder,
 │                           floating launcher render/drag/two-option menu logic
-├── db.js                   IndexedDB wrapper (Promise-based) — used by sidepanel.js
+├── db.js                   IndexedDB wrapper (Promise-based) — used by sidepanel modules
 │
 ├── reader.html             Reader view UI
 ├── reader.js               ~2400 lines — article render, themes, font, Flash It, TTS,
@@ -251,9 +264,17 @@ chrome-extension/
 │
 ├── sidepanel.html          Side panel UI — Save Selection, current article card,
 │                           reading list, overflow menu, settings page, footer feedback link
-├── sidepanel.js            ~940 lines — list render, add/remove, Save Selection,
-│                           inline title edit, auth UI/state, EPUB merge, tab detection,
-│                           floater settings persistence, storage listeners
+├── sidepanel.js            Side panel ES-module entry-point — boot + event wiring
+├── sidepanel/              Side panel modular logic
+│   ├── state.js            Shared mutable state + sidepanel constants
+│   ├── utils.js            Shared helpers (toast/escape/filesize/download)
+│   ├── auth.js             Sidepanel Google auth state + UI actions
+│   ├── settings.js         Header menu/settings page/floater toggle
+│   ├── tab-detection.js    Active-tab detection + Save Selection visibility
+│   ├── reading-list-add.js Add from reader/regular tab + Save Selection pipeline
+│   ├── reading-list-render.js  List rendering + inline title edit/remove + storage info
+│   ├── epub-build.js       Merged EPUB/XHTML generation logic
+│   └── x4-modal.js         Merge orchestration + X4 modal/check/send/download logic
 ├── sidepanel.css           Side panel styles — cards, compact add button, menu,
 │                           settings page, inline title editor, toasts
 │
@@ -386,13 +407,13 @@ chrome-extension/
 | Single-article EPUB | `reader.js` | canvas-embed images, JSZip, EPUB 3.0 |
 | HTML download | `reader.js` | Standalone HTML with article CSS |
 | Email EPUB | `reader.js` | mailto: link with base64 EPUB |
-| Reading List | `sidepanel.js` + `background.js` | Up to 10 articles, images embedded as PNG data URIs |
-| Save Selection | `sidepanel.js` + `selection.js` + `background.js` | Sidepanel-driven highlighted-text save flow, non-intrusive replacement for old page marker |
+| Reading List | `sidepanel/reading-list-*.js` + `background.js` | Up to 10 articles, images embedded as PNG data URIs |
+| Save Selection | `sidepanel/reading-list-add.js` + `sidepanel/tab-detection.js` + `selection.js` + `background.js` | Sidepanel-driven highlighted-text save flow, non-intrusive replacement for old page marker |
 | Floating launcher | `selection.js` + `background.js` | Draggable webpage launcher opens click-menu (reading view / side panel), position persisted across pages |
 | Floater settings UI | `sidepanel.html/js/css` | 3-dot menu → Settings page → synced `ReadEasy Floater` toggle |
 | Google sign-in | `sidepanel.html/js/css` + `background.js` | Optional Google auth, guest/avatar UI, sync-stored normalized auth state |
-| Inline title editing | `sidepanel.js` + `background.js` | Pencil icon on saved cards, inline input, Save/Cancel, persisted to metadata + IndexedDB |
-| Merged EPUB | `sidepanel.js` | Multi-chapter, image dedup, valid XHTML, EPUB 2+3 nav |
+| Inline title editing | `sidepanel/reading-list-render.js` + `background.js` | Pencil icon on saved cards, inline input, Save/Cancel, persisted to metadata + IndexedDB |
+| Merged EPUB | `sidepanel/epub-build.js` + `sidepanel/x4-modal.js` | Multi-chapter, image dedup, valid XHTML, EPUB 2+3 nav |
 | Merge & Send to X4 | `sidepanel.html/js/css` | Modal flow, connection check, upload, response preview, optional image exclusion with guarded async regeneration |
 | Feedback collection links | `reader.html` + `sidepanel.html` | Reader header **Feedback** + side panel footer **Share feedback & ideas** open Featurebase portal |
 | Reader Merge EPUB shortcut | `reader.html` + `reader.js` | Reader header **Merge EPUBs** opens external merge web app |
@@ -540,6 +561,7 @@ This historical note is retained for chronology only.
 - April 17 latest — floater click menu (`openReaderView` / `openSidePanel`), refresh/menu visibility fix, cross-tab floater rebroadcast, sidepanel Google auth
 - April 17 latest+ — reader/sidepanel Featurebase feedback CTA links added (`https://readeasy.featurebase.app/`)
 - April 17 latest++ — reader toolbar restored external **Merge EPUBs** shortcut (`https://merge-epubs.vercel.app/`)
+- April 18 latest — sidepanel refactored into ES modules (`sidepanel/`), shared state store added, and `sidepanel.html` switched to `type="module"` entry-point loading
 
 ### Quick verification checklist for continuation work
 
@@ -548,6 +570,7 @@ This historical note is retained for chronology only.
 - [ ] Multiple selections from same source page save as distinct items (`#highlight-<timestamp>`)
 - [ ] Merged EPUB contains both full saved articles and saved highlighted selections
 - [ ] `listUpdated` + `chrome.storage.onChanged` keep sidepanel state in sync
+- [ ] Sidepanel module entry-point loads without import errors
 - [ ] Floating launcher appears on regular webpages by default and opens click-menu actions (reading view + side panel)
 - [ ] Disabling `ReadEasy Floater` hides launcher immediately; re-enabling restores it
 - [ ] Floater toggle update applies across already-open tabs without requiring page refresh
