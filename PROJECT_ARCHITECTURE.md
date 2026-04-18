@@ -108,6 +108,12 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
   - Shared mutable state is centralized in `sidepanel/state.js`
   - `sidepanel.html` now loads sidepanel with `type="module"` while keeping `db.js` and `libs/jszip.min.js` as globals loaded first
 
+11. **Floater toggle reliability is hardened for large tab sets**
+  - Disable path now performs direct stale-artifact cleanup for orphaned/non-responsive floater DOM nodes
+  - Background disable flow includes script-injection fallback cleanup for tabs where content-script listeners are stale
+  - Re-enable path injects `selection.js` across scriptable open tabs so floater recovers without manual refresh
+  - `selection.js` now includes idempotent initialization and stale-reference self-healing for reinjection safety
+
 ---
 
 ### Chronological Timeline (Accurate Through April 18, 2026)
@@ -178,6 +184,13 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - Converted sidepanel boot script to module entry-point in `sidepanel.js`
 - Updated `sidepanel.html` script tag to `type="module"` while preserving global load order for `db.js` and `jszip.min.js`
 
+#### Phase N — Floater cross-tab reliability hardening
+- **`983339c`**: Fixed stale/orphaned floater artifacts when disabling across many long-lived tabs
+- Added stable floater DOM IDs/data-attributes and stale-artifact cleanup in `selection.js`
+- Added background disable fallback cleanup injection for tabs where listeners are dormant or stale
+- Added re-enable recovery by injecting `selection.js` into scriptable open tabs
+- Added selection-script idempotency guard + stale-reference self-healing to support safe reinjection
+
 ---
 
 ### Current Message Contracts You Must Preserve
@@ -207,6 +220,8 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
   - Missing value must be treated as `true` and self-healed to `true`
   - `selection.js` must react live to changes so open pages update immediately
   - service worker also rebroadcasts setting changes to all tabs for reliability in dormant/background tab content-script contexts
+  - on disable, stale floater artifacts must be force-cleaned in scriptable tabs even if old listeners are unresponsive
+  - on re-enable, service worker must ensure `selection.js` is present in scriptable open tabs so floater appears without manual tab refresh
 
 5. **Synced auth state contract**
   - `chrome.storage.sync.authState`
@@ -229,6 +244,7 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
   - regular `http/https`
   - `reader.html`
   - unsupported/internal pages (`chrome://`, extension pages)
+10. Floater disable/enable must be symmetric across large tab sets: disable removes all interactive/stale floaters; re-enable restores on all eligible tabs without requiring manual page refresh
 
 ---
 
@@ -244,6 +260,8 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - [ ] Floating launcher menu opens on click and offers both actions (reading view + side panel)
 - [ ] Floating launcher can be dragged and preserves position
 - [ ] `ReadEasy Floater` setting hides/shows launcher immediately across open pages
+- [ ] Disabling floater removes stale/non-clickable artifacts from long-lived tabs (e.g., Gmail/WhatsApp)
+- [ ] Re-enabling floater restores launcher across eligible open tabs without manual refresh
 - [ ] Side panel auth icon supports sign-in/out and persists normalized state
 - [ ] Reader header Feedback and side panel footer feedback links both open `https://readeasy.featurebase.app/`
 
@@ -388,6 +406,8 @@ User Click
 5. sidepanel Settings page updates `floatingButtonEnabled`
 6. `selection.js` listens to `chrome.storage.onChanged` so already-open tabs hide/show the launcher live
 7. service worker listens to sync-key changes and sends `{ action: 'floaterSettingChanged' }` to all tabs to ensure cross-tab immediate consistency
+8. When disabling, service worker also runs fallback cleanup injection to remove stale/orphaned floater/menu DOM artifacts in scriptable tabs
+9. When re-enabling, service worker injects `selection.js` into scriptable open tabs so floater can reappear immediately without manual refresh
 
 ### Message Flow: Sidepanel Google Sign-In
 

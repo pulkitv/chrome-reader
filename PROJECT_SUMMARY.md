@@ -101,6 +101,11 @@ Use this section as the primary source of truth when loading this project into a
    - Shared mutable sidepanel state now lives in `sidepanel/state.js`
    - `sidepanel.html` now loads `sidepanel.js` with `type="module"` while `db.js` + `jszip.min.js` remain preloaded globals
 
+12. **Floater toggle now has robust cross-tab recovery**
+   - Disable path removes stale/orphaned non-responsive floaters across scriptable tabs
+   - Re-enable path restores floaters across eligible already-open tabs without manual refresh
+   - Selection script reinjection is idempotent and self-heals stale floater references
+
 ---
 
 ### Chronological progression (condensed but complete)
@@ -161,6 +166,12 @@ Use this section as the primary source of truth when loading this project into a
 - Moved EPUB build logic to `sidepanel/epub-build.js` and X4 orchestration to `sidepanel/x4-modal.js`
 - Kept `db.js` and `libs/jszip.min.js` as global scripts loaded before module entry-point
 
+#### April 18, 2026 floater reliability follow-up
+- `983339c`: Added stale floater artifact cleanup on disable across long-lived tabs
+- Added background fallback cleanup injection when disabling floater
+- Added re-enable recovery injection of `selection.js` across scriptable open tabs
+- Added selection-script idempotency guard + stale-reference self-healing for reinjection safety
+
 ---
 
 ### Current operational contracts
@@ -179,6 +190,8 @@ Use this section as the primary source of truth when loading this project into a
    - `selection.js` reads synced `floatingButtonEnabled`
    - sidepanel settings writes `floatingButtonEnabled`
    - open tabs update live via `chrome.storage.onChanged` plus background rebroadcast (`floaterSettingChanged`) for reliability
+   - disabling also force-cleans stale floater artifacts in scriptable tabs
+   - enabling also reinjects `selection.js` in scriptable open tabs for immediate floater restoration
 
 5. **Auth control path**
     - sidepanel sends `authSignIn` / `authGetState` / `authSignOut`
@@ -206,6 +219,7 @@ Use this section as the primary source of truth when loading this project into a
 7. Launcher position persistence must remain independent of enable/disable state
 8. Feedback CTAs should continue to point to the Featurebase portal unless intentionally changed
 9. Reader header should continue exposing **Merge EPUBs** alongside **Feedback** unless product direction changes
+10. Floater toggle behavior must stay symmetric on large tab counts: disable clears all stale floaters; re-enable restores across eligible open tabs without manual refresh
 
 ---
 
@@ -220,6 +234,8 @@ Use this section as the primary source of truth when loading this project into a
 - Confirm floating launcher menu opens with both actions and positions near launcher
 - Confirm disabling `ReadEasy Floater` from settings hides launcher immediately
 - Confirm re-enabling restores launcher without needing reinstall
+- Confirm stale/non-clickable floater remnants are removed on disable in long-lived tabs
+- Confirm re-enable restores floater across existing eligible tabs without manual refresh
 - Confirm auth sign-in/out state persists and header icon updates correctly
 - Confirm reader/sidepanel feedback links open `https://readeasy.featurebase.app/`
 - Confirm reader header **Merge EPUBs** opens `https://merge-epubs.vercel.app/`
@@ -562,6 +578,7 @@ This historical note is retained for chronology only.
 - April 17 latest+ — reader/sidepanel Featurebase feedback CTA links added (`https://readeasy.featurebase.app/`)
 - April 17 latest++ — reader toolbar restored external **Merge EPUBs** shortcut (`https://merge-epubs.vercel.app/`)
 - April 18 latest — sidepanel refactored into ES modules (`sidepanel/`), shared state store added, and `sidepanel.html` switched to `type="module"` entry-point loading
+- April 18 latest+ — floater toggle reliability hardened: disable force-cleans stale artifacts and re-enable reinjects `selection.js` across eligible open tabs
 
 ### Quick verification checklist for continuation work
 
@@ -574,6 +591,8 @@ This historical note is retained for chronology only.
 - [ ] Floating launcher appears on regular webpages by default and opens click-menu actions (reading view + side panel)
 - [ ] Disabling `ReadEasy Floater` hides launcher immediately; re-enabling restores it
 - [ ] Floater toggle update applies across already-open tabs without requiring page refresh
+- [ ] No stale/non-clickable floater remnants remain after disable on long-lived tabs
+- [ ] Re-enable restores floater on eligible tabs even if they were open for a long time
 - [ ] Sign-in icon (guest/avatar) and auth dropdown behavior are correct after panel reopen
 - [ ] Internal/unsupported pages (`chrome://`, extension pages) correctly hide Save Selection
 - [ ] Reader and sidepanel feedback CTAs open Featurebase feedback portal

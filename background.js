@@ -526,6 +526,15 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       if (newValue === false) {
         forceRemoveFloaterArtifacts(tab.id);
       }
+
+      // Recovery path: when enabling, ensure selection.js exists in all eligible
+      // open tabs so the floater can be recreated immediately without refresh.
+      if (newValue === true) {
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['selection.js']
+        }).catch(() => {});
+      }
     }
   });
 });

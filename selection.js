@@ -7,6 +7,13 @@
 (function() {
   'use strict';
 
+  // Idempotency guard: allows safe reinjection (e.g. background recovery path)
+  // without duplicating listeners/handlers in the same tab world.
+  if (globalThis.__READEASY_SELECTION_INITIALIZED__) {
+    return;
+  }
+  globalThis.__READEASY_SELECTION_INITIALIZED__ = true;
+
   const FLOATING_BTN_POS_KEY = 'floatingButtonPosition';
   const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
   const FLOATING_BTN_ID = 'readeasy-floating-btn';
@@ -263,6 +270,15 @@
   }
 
   async function updateFloatingButtonVisibility() {
+    // Self-heal stale references if DOM nodes were removed externally
+    // (for example by background fallback cleanup injection).
+    if (floatingBtn && !floatingBtn.isConnected) {
+      floatingBtn = null;
+    }
+    if (floatingMenu && !floatingMenu.isConnected) {
+      floatingMenu = null;
+    }
+
     if (floatingButtonEnabled) {
       await renderFloatingButton();
     } else {
