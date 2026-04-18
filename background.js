@@ -467,13 +467,65 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Broadcast floater setting changes to all open tabs
 const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
+
+function isTabUrlScriptable(url) {
+  if (!url || typeof url !== 'string') return false;
+  return !(
+    url.startsWith('chrome://') ||
+    url.startsWith('chrome-extension://') ||
+    url.startsWith('about:') ||
+    url.startsWith('edge://')
+  );
+}
+
+async function forceRemoveFloaterArtifacts(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const selectors = [
+          '#readeasy-floating-btn',
+          '#readeasy-floating-menu',
+          '[data-readeasy-floating-menu="true"]',
+          'button[title="Open ReadEasy"][aria-label="Open ReadEasy side panel"]'
+        ];
+
+        const toRemove = new Set();
+        selectors.forEach(selector => {
+          document.querySelectorAll(selector).forEach(node => toRemove.add(node));
+        });
+
+        // Fallback for legacy/no-id menu variant.
+        document.querySelectorAll('div[role="menu"]').forEach(menu => {
+          const labels = Array.from(menu.querySelectorAll('button')).map(btn => (btn.textContent || '').trim());
+          if (labels.includes('Switch to reading view') && labels.includes('Open side panel')) {
+            toRemove.add(menu);
+          }
+        });
+
+        toRemove.forEach(node => {
+          try { node.remove(); } catch (_) {}
+        });
+      }
+    });
+  } catch (_) {
+    // Restricted pages (or tabs without script access) are expected to fail.
+  }
+}
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'sync' || !(FLOATING_BUTTON_ENABLED_KEY in changes)) return;
   const newValue = changes[FLOATING_BUTTON_ENABLED_KEY].newValue;
   chrome.tabs.query({}, (tabs) => {
     for (const tab of tabs) {
-      if (!tab.id || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) continue;
+      if (!tab.id || !isTabUrlScriptable(tab.url)) continue;
       chrome.tabs.sendMessage(tab.id, { action: 'floaterSettingChanged', enabled: newValue }).catch(() => {});
+
+      // Extra safety: when disabling, forcibly remove stale/orphaned floaters
+      // in tabs where old content-script instances no longer receive messages.
+      if (newValue === false) {
+        forceRemoveFloaterArtifacts(tab.id);
+      }
     }
   });
 });

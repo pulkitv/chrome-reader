@@ -9,6 +9,8 @@
 
   const FLOATING_BTN_POS_KEY = 'floatingButtonPosition';
   const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
+  const FLOATING_BTN_ID = 'readeasy-floating-btn';
+  const FLOATING_MENU_ID = 'readeasy-floating-menu';
   const DEFAULT_OFFSET = 20;
   let floatingBtn = null;
   let floatingMenu = null;
@@ -123,6 +125,8 @@
     if (floatingMenu || !document.body) return;
 
     floatingMenu = document.createElement('div');
+    floatingMenu.id = FLOATING_MENU_ID;
+    floatingMenu.setAttribute('data-readeasy-floating-menu', 'true');
     floatingMenu.hidden = true;
     floatingMenu.style.display = 'none';
     floatingMenu.setAttribute('role', 'menu');
@@ -198,8 +202,39 @@
     ensureMenuListeners();
   }
 
+  function removeStaleFloatingArtifacts() {
+    const nodesToRemove = new Set();
+
+    const byIdBtn = document.getElementById(FLOATING_BTN_ID);
+    if (byIdBtn) nodesToRemove.add(byIdBtn);
+
+    const byIdMenu = document.getElementById(FLOATING_MENU_ID);
+    if (byIdMenu) nodesToRemove.add(byIdMenu);
+
+    document.querySelectorAll('[data-readeasy-floating-menu="true"]').forEach(node => nodesToRemove.add(node));
+
+    // Fallback cleanup for pre-ID floaters left after extension/script lifecycle changes.
+    document
+      .querySelectorAll('button[title="Open ReadEasy"][aria-label="Open ReadEasy side panel"]')
+      .forEach(node => nodesToRemove.add(node));
+
+    document
+      .querySelectorAll('div[role="menu"]')
+      .forEach(menu => {
+        const labels = Array.from(menu.querySelectorAll('button')).map(btn => (btn.textContent || '').trim());
+        if (labels.includes('Switch to reading view') && labels.includes('Open side panel')) {
+          nodesToRemove.add(menu);
+        }
+      });
+
+    nodesToRemove.forEach(node => {
+      try { node.remove(); } catch (_) {}
+    });
+  }
+
   function removeFloatingButton() {
     closeFloatingMenu();
+    removeStaleFloatingArtifacts();
     if (floatingMenu) {
       floatingMenu.remove();
       floatingMenu = null;
@@ -302,6 +337,7 @@
     if (floatingBtn || !document.body || !floatingButtonEnabled) return;
 
     floatingBtn = document.createElement('button');
+    floatingBtn.id = FLOATING_BTN_ID;
     floatingBtn.type = 'button';
     floatingBtn.setAttribute('aria-label', 'Open ReadEasy side panel');
     floatingBtn.title = 'Open ReadEasy';
@@ -494,6 +530,9 @@
 
   (async () => {
     await loadFloatingButtonEnabledSetting();
+    if (!floatingButtonEnabled) {
+      removeStaleFloatingArtifacts();
+    }
     await updateFloatingButtonVisibility();
   })();
 })();
