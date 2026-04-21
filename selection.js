@@ -31,6 +31,46 @@
   let startLeft = 0;
   let startTop = 0;
 
+  function showFloatingToast(message, type = 'error') {
+    if (!document.body) return;
+
+    const existing = document.getElementById('readeasy-floating-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'readeasy-floating-toast';
+    toast.textContent = message;
+    toast.style.cssText = [
+      'position:fixed',
+      'left:20px',
+      'bottom:84px',
+      'max-width:320px',
+      'background:' + (type === 'error' ? '#b91c1c' : '#166534'),
+      'color:#fff',
+      'padding:10px 12px',
+      'border-radius:8px',
+      'font-size:13px',
+      'font-weight:500',
+      'box-shadow:0 8px 20px rgba(0,0,0,0.28)',
+      'z-index:2147483647',
+      'opacity:0',
+      'transform:translateY(8px)',
+      'transition:opacity .2s ease, transform .2s ease'
+    ].join(';');
+
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+    });
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(8px)';
+      setTimeout(() => toast.remove(), 220);
+    }, 3200);
+  }
+
   function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
   }
@@ -174,13 +214,20 @@
     readViewBtn.addEventListener('mouseleave', () => {
       readViewBtn.style.background = 'transparent';
     });
-    readViewBtn.addEventListener('click', (e) => {
+    readViewBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
       closeFloatingMenu();
-      chrome.runtime.sendMessage({ action: 'openReaderView' }).catch((err) => {
+      try {
+        const result = await chrome.runtime.sendMessage({ action: 'openReaderView' });
+        if (!result || !result.success) {
+          const message = (result && result.error) || 'Could not open Reader View on this page';
+          showFloatingToast(message, 'error');
+        }
+      } catch (err) {
         console.warn('[ReadEasy Floating Button] Failed to open reader view:', err);
-      });
+        showFloatingToast('Could not open Reader View on this page', 'error');
+      }
     });
 
     const sidePanelBtn = document.createElement('button');

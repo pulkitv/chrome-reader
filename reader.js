@@ -60,6 +60,11 @@ async function loadArticle() {
       return;
     }
 
+    if (!currentArticle.content) {
+      displayError('Could not extract readable content from this page.');
+      return;
+    }
+
     // Update document title
     document.title = currentArticle.title || 'ReadEasy';
 
@@ -93,6 +98,9 @@ async function loadArticle() {
 
     // Sanitize and display article content
     bodyEl.innerHTML = sanitizeHtml(currentArticle.content);
+
+    const textChars = Number(currentArticle.visibleTextChars) ||
+      ((currentArticle.textContent || '').replace(/\s+/g, ' ').trim().length);
 
     // Debug: Check images in content
     const images = bodyEl.querySelectorAll('img');
@@ -666,9 +674,9 @@ async function loadPreferences() {
 function displayError(message) {
   const bodyEl = document.getElementById('articleBody');
   bodyEl.innerHTML = `
-    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
-      <p style="font-size: 1.2em; margin-bottom: 16px;">⚠️ ${message}</p>
-      <button onclick="window.close()" style="padding: 10px 20px; background: var(--link-color); color: white; border: none; border-radius: 6px; cursor: pointer;">
+    <div class="reader-error-state">
+      <p class="reader-error-message">⚠️ ${message}</p>
+      <button onclick="window.close()" class="reader-error-close-btn">
         Close
       </button>
     </div>

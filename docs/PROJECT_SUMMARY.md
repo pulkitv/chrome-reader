@@ -106,6 +106,23 @@ Use this section as the primary source of truth when loading this project into a
    - Re-enable path restores floaters across eligible already-open tabs without manual refresh
    - Selection script reinjection is idempotent and self-heals stale floater references
 
+13. **Extraction is now resilient for short and social-media pages**
+   - Global Readability `charThreshold` lowered to 250 (was 500)
+   - Fallback extraction added: if Readability fails or yields < 220 chars, the highest-text-content DOM element is used
+   - Retry ladder `[0, 350, 900]` ms in `background.js` and `sidepanel/reading-list-add.js` handles dynamic/SPA pages
+   - Toolbar click shows a visible badge (`!`) on failure instead of a silent no-op
+   - Floater "Switch to reading view" shows an in-page toast on failure
+
+14. **Social dialog extraction added (Facebook, Instagram, Reddit)**
+   - `content.js` checks for an active `[role="dialog"]` / `[aria-modal="true"]` overlay before full-document extraction
+   - Dialog detection is domain-gated to `facebook.com`, `instagram.com`, `reddit.com`, `twitter.com`, `x.com`, `linkedin.com`
+   - Enables logged-in Facebook post modals, Instagram overlays, and Reddit post dialogs to open in reader view
+   - `extractionMode: 'dialog'` is returned in article metadata
+
+15. **CDN referrer rules expanded for Facebook and Instagram**
+   - `rules.json` rules 3 and 4 added for `*fbcdn.net*` and `*cdninstagram.com*` image requests
+   - Referrer set to `https://www.facebook.com/` and `https://www.instagram.com/` so CDN images load in the reader tab
+
 ---
 
 ### Chronological progression (condensed but complete)
@@ -172,6 +189,18 @@ Use this section as the primary source of truth when loading this project into a
 - Added re-enable recovery injection of `selection.js` across scriptable open tabs
 - Added selection-script idempotency guard + stale-reference self-healing for reinjection safety
 
+#### April 22, 2026 extraction resilience + social dialog support
+- Lowered global Readability `charThreshold` from 500 → 250 in `content.js`
+- Added `buildFallbackArticle()` using highest-text-content DOM element when Readability fails
+- Added extraction metadata: `extractionMode`, `isFallback`, `visibleTextChars`, `isThinContent`
+- Added `DIALOG_SELECTORS`, `pickActiveDialog()`, `buildDialogArticle()` in `content.js`
+- Dialog detection domain-gated to social platforms only (facebook, instagram, reddit, twitter/x, linkedin)
+- Added retry extraction ladder `[0, 350, 900]` ms in `background.js` and `sidepanel/reading-list-add.js`
+- Added `showActionFailureBadge()` in `background.js` for visible toolbar failure feedback
+- Added floater in-page toast (`showFloatingToast`) in `selection.js` for `openReaderView` failures
+- Added `rules.json` rules 3 (`fbcdn.net`) and 4 (`cdninstagram.com`) with platform-appropriate referrers
+- Removed extraction metadata notice banner from reader view (was exposing internal state to users)
+
 ---
 
 ### Current operational contracts
@@ -220,6 +249,9 @@ Use this section as the primary source of truth when loading this project into a
 8. Feedback CTAs should continue to point to the Featurebase portal unless intentionally changed
 9. Reader header should continue exposing **Merge EPUBs** alongside **Feedback** unless product direction changes
 10. Floater toggle behavior must stay symmetric on large tab counts: disable clears all stale floaters; re-enable restores across eligible open tabs without manual refresh
+11. Dialog extraction must remain domain-gated — never run `pickActiveDialog()` on non-social domains to avoid false positives on article pages with cookie/newsletter modals
+12. `buildFallbackArticle()` is the last-resort path; dialog extraction and Readability take priority
+13. CDN referrer rules in `rules.json` must use platform-appropriate referer values (facebook.com/instagram.com, not google.com) for social CDNs
 
 ---
 
@@ -239,14 +271,21 @@ Use this section as the primary source of truth when loading this project into a
 - Confirm auth sign-in/out state persists and header icon updates correctly
 - Confirm reader/sidepanel feedback links open `https://readeasy.featurebase.app/`
 - Confirm reader header **Merge EPUBs** opens `https://merge-epubs.vercel.app/`
+- Confirm regular article pages (Medium, BBC, Wikipedia) still extract correctly
+- Confirm logged-in Facebook post modal opens in reader view
+- Confirm reader view does NOT show extraction metadata banner to users
+- Confirm toolbar shows `!` badge when extraction fails on an unsupported page
+- Confirm floater toast appears when "Switch to reading view" fails
+- Confirm Facebook/Instagram post images load in reader tab (no 403s)
 
 ---
 
-> If older sections below conflict with this April 18 summary, trust this section first.
+> If older sections below conflict with this April 22 summary, trust this section first.
+> *(Previously: April 18 was canonical — superseded by April 22 above.)*
 
 > **For AI assistants:** Read `PROJECT_ARCHITECTURE.md` for a full deep-dive. This file is a quick orientation.
 
-> **Last updated:** April 18, 2026
+> **Last updated:** April 22, 2026
 
 ---
 

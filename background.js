@@ -9,6 +9,8 @@ const DB_VERSION = 1;
 const STORE_NAME = 'savedArticles';
 const AUTH_STATE_KEY = 'authState';
 const AUTH_PROVIDER_GOOGLE = 'google';
+const MIN_ACCEPTED_CONTENT_CHARS = 180;
+const EXTRACTION_RETRY_DELAYS_MS = [0, 350, 900];
 
 let inMemoryAuthToken = null;
 
@@ -282,27 +284,71 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 async function openReaderViewForTab(tab) {
+  function createAppError(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
+  }
+
+  function getArticleTextLength(article) {
+    if (!article || typeof article !== 'object') return 0;
+    const textContent = typeof article.textContent === 'string' ? article.textContent : '';
+    const normalized = textContent.replace(/\s+/g, ' ').trim();
+    if (normalized.length) return normalized.length;
+
+    const visible = Number(article.visibleTextChars);
+    if (Number.isFinite(visible) && visible > 0) return visible;
+    return 0;
+  }
+
+  function isArticleUsable(article) {
+    if (!article || !article.content) return false;
+    return getArticleTextLength(article) >= MIN_ACCEPTED_CONTENT_CHARS;
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function extractArticleWithRetries(tabId) {
+    let lastError = null;
+
+    for (const delay of EXTRACTION_RETRY_DELAYS_MS) {
+      if (delay > 0) {
+        await sleep(delay);
+      }
+
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['libs/Readability.js', 'content.js']
+        });
+
+        const article = results && results[0] && results[0].result;
+        if (isArticleUsable(article)) {
+          return article;
+        }
+
+        lastError = createAppError('EXTRACTION_EMPTY', 'Failed to extract enough readable content from this page');
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || createAppError('EXTRACTION_FAILED', 'Failed to extract article content');
+  }
+
   if (!tab || !tab.id || !tab.url) {
-    throw new Error('No active tab available');
+    throw createAppError('NO_ACTIVE_TAB', 'No active tab available');
   }
 
   // Don't run on chrome:// or extension pages
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-    throw new Error('Cannot run ReadEasy on this page');
+    throw createAppError('UNSUPPORTED_PAGE', 'Cannot run ReadEasy on this page');
   }
 
-  // Inject the content script to extract article content
-  const results = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ['libs/Readability.js', 'content.js']
-  });
-
-  // Get the extracted article from the content script
-  const article = results[0].result;
-
-  if (!article || !article.content) {
-    throw new Error('Failed to extract article content');
-  }
+  // Extract article content with retries for dynamic pages
+  const article = await extractArticleWithRetries(tab.id);
 
   // Store the article in session storage with the original URL
   await chrome.storage.session.set({
@@ -321,6 +367,25 @@ async function openReaderViewForTab(tab) {
   await chrome.tabs.create({
     url: readerUrl.toString()
   });
+}
+
+async function showActionFailureBadge(message) {
+  try {
+    await chrome.action.setBadgeBackgroundColor({ color: '#dc3545' });
+    await chrome.action.setBadgeText({ text: '!' });
+    await chrome.action.setTitle({ title: `ReadEasy: ${message}` });
+
+    setTimeout(async () => {
+      try {
+        await chrome.action.setBadgeText({ text: '' });
+        await chrome.action.setTitle({ title: 'Open ReadEasy' });
+      } catch (_) {
+        // ignore badge reset failures
+      }
+    }, 5000);
+  } catch (_) {
+    // ignore action badge failures
+  }
 }
 
 // Handle messages from reader and sidepanel
@@ -458,7 +523,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     } catch (error) {
       console.error('Error handling message:', error);
-      sendResponse({ success: false, error: error.message });
+      sendResponse({ success: false, error: error.message, errorCode: error.code || 'UNKNOWN_ERROR' });
     }
   })();
   
@@ -545,5 +610,6 @@ chrome.action.onClicked.addListener(async (tab) => {
     await openReaderViewForTab(tab);
   } catch (error) {
     console.error('Error extracting article:', error);
+    await showActionFailureBadge(error && error.message ? error.message : 'Failed to open Reader View');
   }
 });

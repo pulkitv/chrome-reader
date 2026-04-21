@@ -18,6 +18,54 @@ import { showToast } from './utils.js';
 import { initPanel } from './reading-list-render.js';
 import { hideCurrentArticleSection, updateSaveSelectionVisibility } from './tab-detection.js';
 
+const EXTRACTION_RETRY_DELAYS_MS = [0, 350, 900];
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getExtractedTextLength(article) {
+  if (!article || typeof article !== 'object') return 0;
+  const textContent = typeof article.textContent === 'string' ? article.textContent : '';
+  const normalized = textContent.replace(/\s+/g, ' ').trim();
+  if (normalized.length) return normalized.length;
+
+  const visible = Number(article.visibleTextChars);
+  return Number.isFinite(visible) ? visible : 0;
+}
+
+function isExtractedArticleUsable(article) {
+  return !!(article && article.content && getExtractedTextLength(article) >= 180);
+}
+
+async function extractArticleFromTabWithRetries(tabId) {
+  let lastError = null;
+
+  for (const delay of EXTRACTION_RETRY_DELAYS_MS) {
+    if (delay > 0) {
+      await sleep(delay);
+    }
+
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['libs/Readability.js', 'content.js']
+      });
+
+      const article = results && results[0] && results[0].result;
+      if (isExtractedArticleUsable(article)) {
+        return article;
+      }
+
+      lastError = new Error('Could not extract enough readable content from this page.');
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Could not extract content from this page.');
+}
+
 // ── Add via reader tab ─────────────────────────────────────────────────────
 
 /**
@@ -196,16 +244,7 @@ export async function handleAddToListFromRegularTab(tabId, tabUrl) {
     addBtn.disabled = true;
     addBtn.querySelector('span').textContent = 'Extracting…';
 
-    // Inject Readability + content script — returns article.content with absolute URL srcs
-    const results = await chrome.scripting.executeScript({
-      target: { tabId },
-      files:  ['libs/Readability.js', 'content.js']
-    });
-
-    const article = results && results[0] && results[0].result;
-    if (!article || !article.content) {
-      throw new Error('Could not extract article from this page.\nTry opening it in Reader View first.');
-    }
+    const article = await extractArticleFromTabWithRetries(tabId);
 
     // Parse HTML so we can enumerate img elements
     const tempDiv = document.createElement('div');
