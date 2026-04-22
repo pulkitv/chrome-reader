@@ -397,7 +397,13 @@
   }
 
   async function renderFloatingButton() {
-    if (floatingBtn || !document.body || !floatingButtonEnabled) return;
+    if (!document.body || !floatingButtonEnabled) return;
+
+    // Remove any stale floating artifacts from previous injections/reloads
+    removeStaleFloatingArtifacts();
+
+    // If a button is already being rendered, don't create another
+    if (floatingBtn) return;
 
     floatingBtn = document.createElement('button');
     floatingBtn.id = FLOATING_BTN_ID;
