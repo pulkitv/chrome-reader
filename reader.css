@@ -140,20 +140,18 @@ body {
   flex-shrink: 0;
 }
 
-/* Donate button styling */
-#donateBtn {
-  background: linear-gradient(135deg, #FFDD57 0%, #FFA500 100%);
-  border: 1px solid #FFA500;
-  color: #000;
-  font-weight: 600;
-  transition: all 0.3s ease;
+/* Edit button — pastel yellow for visibility in the header bar */
+#editBtn {
+  background-color: #fef9c3;
+  border-color: #fde047;
+  color: #713f12;
 }
 
-#donateBtn:hover {
-  background: linear-gradient(135deg, #FFE066 0%, #FFB520 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(255, 165, 0, 0.3);
+#editBtn:hover {
+  background-color: #fef08a;
+  border-color: #facc15;
 }
+
 
 #donateBtn svg {
   stroke: #000;
@@ -925,4 +923,235 @@ body.font-xxlarge {
   border: none;
   border-radius: 6px;
   cursor: pointer;
+}
+
+/* ============================================================
+   Edit Mode
+   ============================================================ */
+
+/* Extra body padding when edit toolbar is visible */
+body.edit-mode {
+  padding-top: calc(var(--header-height) + 44px);
+}
+
+/* Fixed edit toolbar below the reader header */
+.edit-toolbar {
+  position: fixed;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  height: 44px;
+  z-index: 999;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0 12px;
+  background-color: var(--header-bg);
+  border-bottom: 2px solid var(--link-color);
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+body.edit-mode .edit-toolbar {
+  display: flex;
+}
+
+/* Toolbar buttons */
+.edit-tool-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 4px 7px;
+  border-radius: 4px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 28px;
+  justify-content: center;
+  transition: background-color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.edit-tool-btn:hover {
+  background-color: var(--border-color);
+}
+
+.edit-tool-btn.active {
+  background-color: var(--link-color);
+  color: #fff;
+  border-color: var(--link-color);
+}
+
+.edit-italic { font-style: italic; }
+.edit-underline { text-decoration: underline; }
+
+/* Font color label wraps a hidden color input */
+.edit-color-label {
+  position: relative;
+  cursor: pointer;
+}
+
+.edit-color-label input[type="color"] {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+/* Font size select */
+.edit-tool-select {
+  background: var(--header-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  height: 28px;
+}
+
+/* Separator */
+.edit-tool-sep {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-color);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Pushes Save/Cancel to the far right */
+.edit-tool-spacer {
+  flex: 1;
+}
+
+/* Note button */
+.edit-note-btn {
+  border-color: var(--border-color);
+  color: var(--link-color);
+}
+
+/* Save / Cancel action buttons */
+.edit-action-btn {
+  padding: 4px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+
+.edit-action-btn:hover { opacity: 0.85; }
+
+.edit-save-btn {
+  background-color: var(--link-color);
+  color: #fff;
+  border: none;
+}
+
+.edit-cancel-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  margin-right: 6px;
+}
+
+/* All editable regions — visible focus ring and cursor */
+#articleTitle[contenteditable="true"],
+#articleByline[contenteditable="true"],
+#articleBody[contenteditable="true"] {
+  outline: 2px solid var(--link-color);
+  outline-offset: 6px;
+  border-radius: 4px;
+  caret-color: var(--link-color);
+}
+
+#articleBody[contenteditable="true"] {
+  min-height: 100px;
+  cursor: text;
+}
+
+/* Override user-select:none / pointer-events:none that arrive via stylesheet rules
+   in extracted article HTML — these block caret placement inside contenteditable. */
+#articleBody[contenteditable="true"] * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  pointer-events: auto !important;
+}
+
+/* Note separators — horizontal rules above and below each note block */
+hr.note-sep {
+  border: none;
+  border-top: 2px solid var(--link-color);
+  margin: 20px 0;
+  opacity: 0.6;
+}
+
+/* Inline note callout block — theme-aware */
+.note-block {
+  background-color: rgba(var(--note-bg-rgb), 0.12);
+  border-left: 4px solid var(--link-color);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 20px 0;
+  font-size: 0.95em;
+}
+
+.light-theme { --note-bg-rgb: 255, 200, 0; }
+.sepia-theme { --note-bg-rgb: 184, 134, 11; }
+.dark-theme  { --note-bg-rgb: 100, 180, 255; }
+
+/* Link popover — floats below the edit toolbar */
+.edit-link-popover {
+  position: fixed;
+  top: calc(var(--header-height) + 44px + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.edit-link-popover[hidden] { display: none; }
+
+.edit-link-input {
+  width: 280px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 13px;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  outline: none;
+}
+
+.edit-link-input:focus {
+  border-color: var(--link-color);
+}
+
+.edit-link-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.edit-link-close-btn:hover {
+  color: var(--text-color);
+  background-color: var(--border-color);
 }

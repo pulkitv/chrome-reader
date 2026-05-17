@@ -124,7 +124,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M2 21h20M17.5 4h-11a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm-6 2v6m3-6v6"/>
               </svg>
-              <span>Donate</span>
+              <span>Buy me coffee</span>
             </a>
           </div>
         </div>
@@ -155,11 +155,140 @@
               </svg>
               <span>Add to List</span>
             </button>
+            <button id="editBtn" class="icon-btn text-btn icon-text-btn" title="Edit article">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              <span>Edit</span>
+            </button>
           </div>
         </div>
       </div>
     </div>
   </header>
+
+  <!-- Edit toolbar — shown only in edit mode via body.edit-mode CSS class -->
+  <div id="editToolbar" class="edit-toolbar">
+
+    <!-- Bold / Italic / Underline -->
+    <button id="editBold" class="edit-tool-btn" title="Bold"><strong>B</strong></button>
+    <button id="editItalic" class="edit-tool-btn edit-italic" title="Italic"><em>I</em></button>
+    <button id="editUnderline" class="edit-tool-btn edit-underline" title="Underline"><u>U</u></button>
+
+    <div class="edit-tool-sep"></div>
+
+    <!-- Font color -->
+    <label class="edit-tool-btn edit-color-label" title="Font color">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 3L5 21M19 3l-4 18M5 9h16M3 15h16"/>
+      </svg>
+      <input type="color" id="editFontColor" value="#000000" tabindex="-1">
+    </label>
+
+    <!-- Font size -->
+    <select id="editFontSize" class="edit-tool-select" title="Font size">
+      <option value="12">12px</option>
+      <option value="14">14px</option>
+      <option value="16" selected>16px</option>
+      <option value="18">18px</option>
+      <option value="22">22px</option>
+      <option value="28">28px</option>
+      <option value="36">36px</option>
+    </select>
+
+    <div class="edit-tool-sep"></div>
+
+    <!-- Alignment -->
+    <button id="editAlignLeft" class="edit-tool-btn" title="Align left">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/>
+      </svg>
+    </button>
+    <button id="editAlignCenter" class="edit-tool-btn" title="Align center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
+      </svg>
+    </button>
+    <button id="editAlignRight" class="edit-tool-btn" title="Align right">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+
+    <!-- Bullet list -->
+    <button id="editBulletList" class="edit-tool-btn" title="Bullet list">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/>
+        <circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/>
+      </svg>
+    </button>
+
+    <!-- Numbered list -->
+    <button id="editNumberedList" class="edit-tool-btn" title="Numbered list">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/>
+        <text x="1" y="7" font-size="6" fill="currentColor" stroke="none">1</text>
+        <text x="1" y="13" font-size="6" fill="currentColor" stroke="none">2</text>
+        <text x="1" y="19" font-size="6" fill="currentColor" stroke="none">3</text>
+      </svg>
+    </button>
+
+    <!-- Horizontal rule -->
+    <button id="editInsertHR" class="edit-tool-btn" title="Insert horizontal separator">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="8" x2="8" y2="8" stroke-width="1" opacity="0.4"/>
+        <line x1="3" y1="16" x2="8" y2="16" stroke-width="1" opacity="0.4"/>
+      </svg>
+    </button>
+
+    <div class="edit-tool-sep"></div>
+
+    <!-- Insert note callout -->
+    <button id="editInsertNote" class="edit-tool-btn edit-note-btn" title="Insert note block">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+      </svg>
+      <span>Note</span>
+    </button>
+
+    <!-- Insert image -->
+    <label id="editInsertImageLabel" class="edit-tool-btn" title="Insert image">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <input type="file" id="editImageInput" accept="image/*" tabindex="-1" style="position:absolute;opacity:0;width:0;height:0;">
+    </label>
+
+    <!-- Insert / edit link -->
+    <button id="editLinkBtn" class="edit-tool-btn" title="Insert or edit link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      </svg>
+    </button>
+
+    <div class="edit-tool-spacer"></div>
+
+    <button id="editCancel" class="edit-action-btn edit-cancel-btn">Cancel</button>
+    <button id="editSave" class="edit-action-btn edit-save-btn">Save</button>
+  </div>
+
+  <!-- Link popover — appears below edit toolbar when link button is clicked -->
+  <div id="editLinkPopover" class="edit-link-popover" hidden>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.5">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+    </svg>
+    <input type="text" id="editLinkInput" class="edit-link-input" placeholder="https://">
+    <button id="editLinkApply"  class="edit-action-btn edit-save-btn"  style="padding:3px 10px;font-size:12px;">Apply</button>
+    <button id="editLinkUnlink" class="edit-action-btn edit-cancel-btn" style="padding:3px 10px;font-size:12px;" hidden>Remove</button>
+    <button id="editLinkClose"  class="edit-link-close-btn" title="Cancel">✕</button>
+  </div>
 
   <!-- Main article content -->
   <main class="reader-main">

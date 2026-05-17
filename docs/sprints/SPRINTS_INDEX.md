@@ -2,7 +2,7 @@
 
 > Sprint cadence: 1 month per sprint
 > Coverage start: January 2026
-> Last updated: April 19, 2026
+> Last updated: May 17, 2026
 
 This index tracks month-by-month delivery history so humans and CLI agents can quickly review what was shipped, why it was prioritized, and what changed.
 
@@ -12,6 +12,8 @@ This index tracks month-by-month delivery history so humans and CLI agents can q
 2. [2026-02 — Reading Experience Expansion](2026-02-sprint-reading-experience-expansion.md)
 3. [2026-03 — Reading List Scale + X4 Delivery](2026-03-sprint-reading-list-and-x4-delivery.md)
 4. [2026-04 — Sidepanel Rearchitecture + Floater Reliability](2026-04-sprint-sidepanel-rearchitecture-and-floater.md)
+5. [2026-05 (Part 1) — Facebook Post Permalink Extraction](2026-05-sprint-facebook-permalink-extraction.md)
+6. [2026-05 (Part 2) — Reader Edit Mode, Toolbar Expansion, and PDF Merge](2026-05-sprint-reader-edit-mode-and-pdf.md)
 
 ## How to use this folder
 

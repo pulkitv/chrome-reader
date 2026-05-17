@@ -1,6 +1,6 @@
 # ReadEasy Extension — Architecture Hub
 
-> Last updated: April 19, 2026
+> Last updated: May 17, 2026
 
 This file is the entry point for architecture and implementation details.
 
@@ -43,6 +43,7 @@ Read them in order.
 - `sidepanel/reading-list-render.js` — render/edit/remove list cards + storage info
 - `sidepanel/epub-build.js` — merged EPUB generation
 - `sidepanel/x4-modal.js` — X4 modal orchestration (regen/send/download)
+- `sidepanel/pdf-build.js` — PDF preview: builds merged HTML blob, opens print dialog tab
 
 ### Libraries & assets
 
@@ -77,6 +78,7 @@ Read them in order.
 - `sidepanel/reading-list-render.js` — list rendering/edit/remove flows
 - `sidepanel/epub-build.js` — merged EPUB generation primitives
 - `sidepanel/x4-modal.js` — X4 modal flow and upload orchestration
+- `sidepanel/pdf-build.js` — PDF preview module (merged HTML blob → print dialog)
 
 ### Vendor/resource folders
 

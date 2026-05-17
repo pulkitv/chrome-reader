@@ -52,6 +52,8 @@ import {
   handleX4ExcludeImagesChange
 } from './sidepanel/x4-modal.js';
 
+import { handleMergePDF } from './sidepanel/pdf-build.js';
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 
 // Initialise authState to a signed-out default immediately (avoids null reads
@@ -146,6 +148,10 @@ function setupEventListeners() {
   // ── EPUB / X4 ──
   document.getElementById('mergeEpubBtn').addEventListener('click', async () => {
     await handleMergeEPUB();
+  });
+
+  document.getElementById('mergePdfBtn').addEventListener('click', async () => {
+    await handleMergePDF();
   });
 
   document.getElementById('mergeSendX4Btn').addEventListener('click', async () => {

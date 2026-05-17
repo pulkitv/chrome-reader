@@ -49,6 +49,7 @@ export async function initPanel() {
 export async function renderArticleList() {
   const listContainer = document.getElementById('articleList');
   const mergeBtn      = document.getElementById('mergeEpubBtn');
+  const mergePdfBtn   = document.getElementById('mergePdfBtn');
   const mergeSendBtn  = document.getElementById('mergeSendX4Btn');
 
   // Clear existing content
@@ -67,6 +68,7 @@ export async function renderArticleList() {
       </div>
     `;
     mergeBtn.disabled     = true;
+    mergePdfBtn.disabled  = true;
     mergeSendBtn.disabled = true;
     return;
   }
@@ -78,6 +80,7 @@ export async function renderArticleList() {
   });
 
   mergeBtn.disabled     = false;
+  mergePdfBtn.disabled  = false;
   mergeSendBtn.disabled = false;
 }
 

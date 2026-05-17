@@ -15,6 +15,13 @@ let wordArray = []; // Array of word objects {text, element, length}
 let flashTimeout = null;
 let isPaused = false;
 
+// Edit mode state
+let isEditMode = false;
+let preEditContent = '';
+let preEditTitle = '';
+let preEditByline = '';
+let savedLinkRange = null; // selection snapshot preserved while link popover is open
+
 // Text-to-Speech state
 const TTS_WEBAPP_URL = 'https://merge-epubs.vercel.app/#/reader';
 let ttsUtterance = null;
@@ -352,19 +359,92 @@ function setupEventListeners() {
     }
   });
 
+  // Edit mode controls
+  document.getElementById('editBtn').addEventListener('click', enterEditMode);
+  document.getElementById('editSave').addEventListener('click', () => exitEditMode(true));
+  document.getElementById('editCancel').addEventListener('click', () => exitEditMode(false));
+  document.getElementById('editBold').addEventListener('click', () => execFormatCmd('bold'));
+  document.getElementById('editItalic').addEventListener('click', () => execFormatCmd('italic'));
+  document.getElementById('editUnderline').addEventListener('click', () => execFormatCmd('underline'));
+  document.getElementById('editFontColor').addEventListener('input', e => execFormatCmd('foreColor', e.target.value));
+  document.getElementById('editFontSize').addEventListener('change', e => applyFontSize(Number(e.target.value)));
+  document.getElementById('editAlignLeft').addEventListener('click', () => execFormatCmd('justifyLeft'));
+  document.getElementById('editAlignCenter').addEventListener('click', () => execFormatCmd('justifyCenter'));
+  document.getElementById('editAlignRight').addEventListener('click', () => execFormatCmd('justifyRight'));
+  document.getElementById('editBulletList').addEventListener('click', () => execFormatCmd('insertUnorderedList'));
+  document.getElementById('editNumberedList').addEventListener('click', () => execFormatCmd('insertOrderedList'));
+  document.getElementById('editInsertHR').addEventListener('click', insertHorizontalRule);
+  document.getElementById('editInsertNote').addEventListener('click', insertNoteBlock);
+
+  // Image insert
+  document.getElementById('editImageInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) insertImageAtCursor(file);
+    e.target.value = ''; // reset so the same file can be re-inserted
+  });
+
+  // Link popover
+  document.getElementById('editLinkBtn').addEventListener('click', openLinkPopover);
+  document.getElementById('editLinkApply').addEventListener('click', applyLink);
+  document.getElementById('editLinkUnlink').addEventListener('click', unlinkSelection);
+  document.getElementById('editLinkClose').addEventListener('click', closeLinkPopover);
+  document.getElementById('editLinkInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); applyLink(); }
+    if (e.key === 'Escape') closeLinkPopover();
+  });
+
+  // Force cursor placement via caretRangeFromPoint on body clicks, but only when
+  // the result is a collapsed cursor (single click). A non-collapsed selection means
+  // the user just finished a drag-select or triple-click — preserve that.
+  document.getElementById('articleBody').addEventListener('click', e => {
+    if (!isEditMode) return;
+    const sel = window.getSelection();
+    if (sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed) return; // preserve text selection
+    const body = document.getElementById('articleBody');
+    const range = document.caretRangeFromPoint(e.clientX, e.clientY);
+    if (range && body.contains(range.startContainer)) {
+      body.focus({ preventScroll: true });
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  });
+
+  // Debounce selectionchange → queryCommandState: on large documents these calls
+  // are expensive and can lag if triggered on every cursor movement.
+  let _selChangeTimer = null;
+  document.addEventListener('selectionchange', () => {
+    clearTimeout(_selChangeTimer);
+    _selChangeTimer = setTimeout(updateToolbarState, 30);
+  });
+
+  // Prevent toolbar buttons from stealing focus (and losing the selection) when clicked.
+  // Exempt: the font-size <select>, the color <input>, and the Save/Cancel action buttons.
+  document.getElementById('editToolbar').addEventListener('mousedown', e => {
+    const t = e.target;
+    if (t.tagName === 'SELECT' || t.tagName === 'OPTION') return;
+    if (t.tagName === 'INPUT' && (t.type === 'color' || t.type === 'file')) return;
+    if (t.id === 'editSave' || t.id === 'editCancel') return;
+    e.preventDefault();
+  });
+
   // Scroll progress
   window.addEventListener('scroll', updateProgressBar);
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    // Don't trigger shortcuts if typing in input fields
+    // Don't trigger shortcuts if typing in input fields or while in edit mode
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
       return;
     }
-    
-    // Escape to close (or exit Flash It mode)
+    if (isEditMode && e.key !== 'Escape') {
+      return;
+    }
+
+    // Escape to close, exit Flash It, or cancel edit mode
     if (e.key === 'Escape') {
-      if (isFlashing) {
+      if (isEditMode) {
+        exitEditMode(false);
+      } else if (isFlashing) {
         stopFlashIt();
       } else {
         window.close();
@@ -406,6 +486,215 @@ function setupEventListeners() {
       restartFlashIt();
     }
   });
+}
+
+/**
+ * Enter edit mode: snapshot content, make article body editable, show toolbar.
+ */
+function enterEditMode() {
+  if (isEditMode) return;
+  isEditMode = true;
+
+  const titleEl  = document.getElementById('articleTitle');
+  const bylineEl = document.getElementById('articleByline');
+  const bodyEl   = document.getElementById('articleBody');
+
+  // Snapshot all three for cancel revert
+  preEditTitle   = titleEl.innerHTML;
+  preEditByline  = bylineEl.innerHTML;
+  preEditContent = bodyEl.innerHTML;
+
+  titleEl.setAttribute('contenteditable', 'true');
+  bylineEl.setAttribute('contenteditable', 'true');
+  bodyEl.setAttribute('contenteditable', 'true');
+
+  // Extracted HTML from some sites includes contenteditable="false" on child elements
+  // (non-editable islands that block cursor placement even inside a contenteditable parent)
+  // and inline user-select/pointer-events styles that hide the caret. Strip both.
+  bodyEl.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+  bodyEl.querySelectorAll('*').forEach(el => {
+    const s = el.style;
+    if (s.userSelect === 'none' || s.webkitUserSelect === 'none') {
+      s.userSelect = '';
+      s.webkitUserSelect = '';
+    }
+    if (s.pointerEvents === 'none') s.pointerEvents = '';
+  });
+
+  document.body.classList.add('edit-mode');
+
+  // Defer focus until the browser has processed the contenteditable DOM change.
+  // On very long articles, calling focus() synchronously can race against the
+  // browser's editing-context initialization, leaving the caret invisible.
+  requestAnimationFrame(() => {
+    titleEl.focus({ preventScroll: true }); // preventScroll keeps long articles in place
+    const range = document.createRange();
+    range.selectNodeContents(titleEl);
+    range.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    updateToolbarState();
+  });
+}
+
+/**
+ * Exit edit mode. If save=true, commits edits to session storage.
+ * If save=false, restores the pre-edit snapshot.
+ */
+function exitEditMode(save) {
+  if (!isEditMode) return;
+  isEditMode = false;
+
+  const titleEl  = document.getElementById('articleTitle');
+  const bylineEl = document.getElementById('articleByline');
+  const bodyEl   = document.getElementById('articleBody');
+
+  if (save) {
+    chrome.storage.session.get('currentArticle').then(({ currentArticle }) => {
+      if (currentArticle) {
+        currentArticle.title   = titleEl.textContent.trim();
+        currentArticle.byline  = bylineEl.textContent.trim();
+        currentArticle.content = bodyEl.innerHTML;
+        chrome.storage.session.set({ currentArticle });
+      }
+    });
+    showNotification('Article saved', 'success');
+  } else {
+    titleEl.innerHTML  = preEditTitle;
+    bylineEl.innerHTML = preEditByline;
+    bodyEl.innerHTML   = preEditContent;
+  }
+
+  titleEl.removeAttribute('contenteditable');
+  bylineEl.removeAttribute('contenteditable');
+  bodyEl.removeAttribute('contenteditable');
+  document.body.classList.remove('edit-mode');
+  closeLinkPopover();
+}
+
+/**
+ * Thin wrapper around execCommand that refocuses the article body first.
+ */
+function execFormatCmd(cmd, value) {
+  // Do NOT refocus — let the command apply to whichever editable element is active
+  document.execCommand(cmd, false, value !== undefined ? value : null);
+  updateToolbarState();
+}
+
+/**
+ * Apply an explicit pixel font size to the current selection.
+ * execCommand('fontSize') only accepts 1-7, so we use size 7 as a marker
+ * and immediately convert the generated <font size> elements to inline styles.
+ */
+function applyFontSize(px) {
+  // Use size 7 as a marker; execCommand('fontSize') only accepts 1–7, not px values
+  document.execCommand('fontSize', false, '7');
+  // Search the whole document so this works whether cursor is in title, byline, or body
+  document.querySelectorAll('font[size="7"]').forEach(el => {
+    el.removeAttribute('size');
+    el.style.fontSize = px + 'px';
+    if (!el.attributes.length) {
+      el.replaceWith(...el.childNodes);
+    }
+  });
+}
+
+/**
+ * Insert a styled note/callout block at the current cursor position.
+ */
+function insertNoteBlock() {
+  document.getElementById('articleBody').focus();
+  const noteHtml = '<hr class="note-sep"><div class="note-block"><strong>📝 Note</strong><br>Type your note here…</div><hr class="note-sep"><p><br></p>';
+  document.execCommand('insertHTML', false, noteHtml);
+}
+
+function insertHorizontalRule() {
+  document.getElementById('articleBody').focus();
+  document.execCommand('insertHTML', false, '<hr><p><br></p>');
+}
+
+/**
+ * Sync Bold/Italic/Underline toolbar button active states with the current selection.
+ */
+function updateToolbarState() {
+  if (!isEditMode) return;
+  document.getElementById('editBold').classList.toggle('active', document.queryCommandState('bold'));
+  document.getElementById('editItalic').classList.toggle('active', document.queryCommandState('italic'));
+  document.getElementById('editUnderline').classList.toggle('active', document.queryCommandState('underline'));
+}
+
+function insertImageAtCursor(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = `<img src="${e.target.result}" alt="${file.name.replace(/"/g, '')}" style="max-width:100%;height:auto;margin:1em 0;display:block;">`;
+    document.execCommand('insertHTML', false, img);
+  };
+  reader.readAsDataURL(file);
+}
+
+function openLinkPopover() {
+  const sel = window.getSelection();
+  savedLinkRange = sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+
+  // Pre-fill URL if cursor is already inside a link
+  const node = savedLinkRange ? savedLinkRange.commonAncestorContainer : null;
+  const existingLink = node
+    ? (node.nodeType === Node.TEXT_NODE ? node.parentElement : node).closest('a')
+    : null;
+
+  const input = document.getElementById('editLinkInput');
+  input.value = existingLink ? existingLink.href : 'https://';
+  document.getElementById('editLinkUnlink').hidden = !existingLink;
+
+  document.getElementById('editLinkPopover').removeAttribute('hidden');
+  input.focus();
+  input.select();
+}
+
+function applyLink() {
+  const url = document.getElementById('editLinkInput').value.trim();
+  // Capture range before closeLinkPopover() nulls savedLinkRange
+  const range = savedLinkRange;
+  closeLinkPopover();
+  if (!range || !url || url === 'https://') return;
+
+  // Restore the saved selection in the correct contenteditable element
+  const container = range.commonAncestorContainer;
+  const editableEl = (container.nodeType === Node.TEXT_NODE ? container.parentElement : container)
+    .closest('[contenteditable]');
+  if (editableEl) editableEl.focus({ preventScroll: true });
+
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  document.execCommand('createLink', false, url);
+
+  // Ensure all new links open in a new tab
+  document.querySelectorAll('#articleBody a, #articleTitle a, #articleByline a').forEach(a => {
+    if (!a.getAttribute('target')) a.setAttribute('target', '_blank');
+    if (!a.getAttribute('rel')) a.setAttribute('rel', 'noopener');
+  });
+}
+
+function unlinkSelection() {
+  // Capture range before closeLinkPopover() nulls savedLinkRange
+  const range = savedLinkRange;
+  closeLinkPopover();
+  if (!range) return;
+  const container = range.commonAncestorContainer;
+  const editableEl = (container.nodeType === Node.TEXT_NODE ? container.parentElement : container)
+    .closest('[contenteditable]');
+  if (editableEl) editableEl.focus({ preventScroll: true });
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  document.execCommand('unlink', false, null);
+}
+
+function closeLinkPopover() {
+  document.getElementById('editLinkPopover').setAttribute('hidden', '');
+  savedLinkRange = null;
 }
 
 /**
@@ -1994,8 +2283,53 @@ async function downloadArticleEPUB() {
   
   console.log('URL replacement complete.');
   
+  // Transform .note-block elements into an Apple Books-compatible structure.
+  // Apple Books overrides `background-color` to match its reading theme, and ignores
+  // border-left on plain <div>. Fix: use <blockquote> (border-left is respected on it),
+  // encode the background as a CSS gradient (not overridden like background-color).
+  // hr.note-sep elements (added by insertNoteBlock) are inlined for EPUB; if a note
+  // was created before this feature, fall back to <p> border separators.
+  const epubBodyEl = document.createElement('div');
+  epubBodyEl.innerHTML = bodyHtml;
+
+  // Inline-style the hr.note-sep separators first (keep the class for the check below)
+  epubBodyEl.querySelectorAll('hr.note-sep').forEach(hr => {
+    hr.setAttribute('style', 'border: none; border-top: 2px solid #0066cc; margin: 20px 0;');
+  });
+
+  epubBodyEl.querySelectorAll('.note-block').forEach(el => {
+    const bq = document.createElement('blockquote');
+    bq.setAttribute('style', [
+      'border-left: 5px solid #0066cc',
+      'background: linear-gradient(to right, #fffde7, #fffde7)',
+      'background-color: #fffde7',
+      'margin: 4px 0',
+      'padding: 10px 16px',
+      'font-size: 0.95em',
+    ].join('; '));
+    while (el.firstChild) bq.appendChild(el.firstChild);
+
+    const hasSepBefore = el.previousElementSibling?.classList.contains('note-sep');
+    const hasSepAfter  = el.nextElementSibling?.classList.contains('note-sep');
+
+    if (hasSepBefore && hasSepAfter) {
+      // hr.note-sep separators already bracket this note — just swap div → blockquote
+      el.replaceWith(bq);
+    } else {
+      // Old note without hr.note-sep — add <p> border separators as fallback
+      const topSep = document.createElement('p');
+      topSep.setAttribute('style', 'border: none; border-top: 2px solid #0066cc; margin: 20px 0 4px; display: block;');
+      const botSep = document.createElement('p');
+      botSep.setAttribute('style', 'border: none; border-bottom: 2px solid #0066cc; margin: 4px 0 20px; display: block;');
+      el.replaceWith(topSep, bq, botSep);
+    }
+  });
+
+  // Strip the class from hr.note-sep — EPUB has no matching stylesheet rule
+  epubBodyEl.querySelectorAll('hr.note-sep').forEach(hr => hr.removeAttribute('class'));
+
   // Convert HTML to XHTML for EPUB compatibility
-  const bodyXHTML = htmlToXHTML(bodyHtml);
+  const bodyXHTML = htmlToXHTML(epubBodyEl.innerHTML);
   
   // Generate filename
   const filename = title
@@ -2133,6 +2467,14 @@ th {
   color: #666;
   font-size: 0.9em;
   margin-top: 0.5em;
+}
+.note-block {
+  background-color: rgba(255, 200, 0, 0.12);
+  border-left: 4px solid #0066cc;
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 20px 0;
+  font-size: 0.95em;
 }`;
   
   const contentHTML = `<?xml version="1.0" encoding="UTF-8"?>

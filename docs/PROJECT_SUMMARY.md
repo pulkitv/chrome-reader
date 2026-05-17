@@ -123,6 +123,35 @@ Use this section as the primary source of truth when loading this project into a
    - `rules.json` rules 3 and 4 added for `*fbcdn.net*` and `*cdninstagram.com*` image requests
    - Referrer set to `https://www.facebook.com/` and `https://www.instagram.com/` so CDN images load in the reader tab
 
+16. **Facebook post permalink extraction added (Priority 0)**
+   - `content.js` now detects Facebook post permalink URLs (`/posts/`, `/permalink.php`, `/photos/`) before any other extraction path
+   - New `extractFacebookPermalink()` function handles two states:
+     - **Not logged in**: finds `[data-pagelet*="Permalink"]` container, applies FB-specific DOM pruning, returns clean post content
+     - **Logged in**: permalink pagelet is absent (post is a dialog overlay on the feed); returns null so Priority 1 dialog extraction (`pickActiveDialog`) handles it
+   - `pruneFacebookNode()` removes FB-specific UI chrome: right rail (`ColumnRight`/`RightRail`), stories, composer, suggested content, ARIA navigation and banner roles
+   - `removeScrambledDates()` strips Facebook's CSS-obfuscated timestamps (characters individually spread across child spans, rearranged by CSS `order`)
+   - `cleanFacebookTitle()` strips the notification count prefix (`(20+)`) and `| Facebook` suffix from the document title
+   - `[role="main"]` intentionally excluded from permalink selectors — it contains the full feed when logged in
+   - New `extractionMode: 'fb-permalink'` returned in article metadata for not-logged-in path
+
+17. **Reader edit mode is implemented**
+   - A pastel-yellow `#editBtn` in the secondary header row enters edit mode
+   - `#articleTitle`, `#articleByline`, and `#articleBody` all become `contenteditable` simultaneously
+   - Fixed `#editToolbar` appears below the main header with: Bold, Italic, Underline, Font Color (color picker), Font Size (12–36 px), Align Left/Center/Right, Bullet List, Numbered List, Horizontal Rule, Insert Note callout, Insert Image, Insert/Edit Link, Save, Cancel
+   - Save persists edited HTML to `chrome.storage.session.currentArticle` (session-only; tab refresh reverts to original)
+   - Cancel reverts all three regions to their pre-edit snapshots
+   - All downstream actions (EPUB export, Add to Reading List, TTS, Flash It) automatically use the edited content after Save
+   - Note callout blocks are inserted with `<hr class="note-sep">` separators above and below; these separators are preserved in EPUB export
+   - Link insert popover captures selection range before showing the URL input; bug where applying a link silently failed is fixed
+   - URL input in the link popover is pre-filled with `https://`
+   - "Donate" button renamed to "Buy me coffee" and its gold gradient styling removed
+
+18. **Sidepanel "Merge & Create PDF" is implemented**
+   - A red `#mergePdfBtn` button appears in the sidepanel footer alongside the EPUB and X4 buttons
+   - Clicking it fetches all saved articles, builds a styled HTML document (cover page, TOC, all articles with page breaks), opens it as a blob URL in a new tab, and auto-triggers Chrome's print dialog
+   - User selects "Save as PDF" in the print dialog to download the merged PDF
+   - Module lives in `sidepanel/pdf-build.js`
+
 ---
 
 ### Chronological progression (condensed but complete)
@@ -189,6 +218,35 @@ Use this section as the primary source of truth when loading this project into a
 - Added re-enable recovery injection of `selection.js` across scriptable open tabs
 - Added selection-script idempotency guard + stale-reference self-healing for reinjection safety
 
+#### May 17, 2026 — Facebook post permalink extraction (Priority 0)
+- Added `isFacebookPostPermalink()` — detects `/posts/`, `/permalink.php`, `/photos/` paths on `facebook.com`
+- Added `extractFacebookPermalink()` — Priority 0 extraction path in `content.js`, fires before dialog check and Readability
+- Added `pruneFacebookNode()` — removes right rail, stories, composer, suggested content, and ARIA navigation/banner roles
+- Added `removeScrambledDates()` — removes CSS-scrambled timestamp elements (≥10 children where ≥65% are 1-char)
+- Added `cleanFacebookTitle()` — strips `(20+)` notification prefix and `| Facebook` suffix from document title
+- Not-logged-in path: finds `[data-pagelet*="Permalink"]`, prunes, returns `extractionMode: 'fb-permalink'`
+- Logged-in path: permalink pagelet absent → `extractFacebookPermalink()` returns null → Priority 1 dialog extraction handles the post overlay modal
+- `[role="main"]` intentionally excluded from `FB_POST_PERMALINK_SELECTORS` to avoid picking up the full feed in logged-in state
+
+#### May 17, 2026 — Reader edit mode (full implementation)
+- Added `#editBtn` (pastel yellow) to reader header secondary row
+- Added `#editToolbar` (fixed bar, below header in edit mode): Bold, Italic, Underline, Font Color, Font Size, Align L/C/R, Bullet List, Numbered List, Horizontal Rule, Insert Note, Insert Image, Insert/Edit Link, Save, Cancel
+- `enterEditMode()` makes title, byline, and body all contenteditable; strips `user-select:none` / `pointer-events:none` inline styles from extracted content; uses `requestAnimationFrame` + `{ preventScroll: true }` for cursor placement
+- `exitEditMode(save)` — Save: persists to `chrome.storage.session.currentArticle`; Cancel: reverts all three snapshots
+- `insertNoteBlock()` inserts `<hr class="note-sep">` above and below the note callout block
+- `insertHorizontalRule()` inserts plain `<hr>` at cursor
+- `insertImageAtCursor(file)` — FileReader → base64 data URL → `execCommand('insertHTML')`
+- Link popover bug fixed: `applyLink()` and `unlinkSelection()` now capture `savedLinkRange` before `closeLinkPopover()` nulls it
+- Link URL input pre-filled with `'https://'`; bare `'https://'` treated as no-op in `applyLink()`
+- EPUB export updated: `.note-block` → `<blockquote>` with gradient background (Apple Books compatible); `hr.note-sep` → inline-styled
+- "Donate" button renamed "Buy me coffee"; gold gradient styling removed
+
+#### May 17, 2026 — Sidepanel Merge & Create PDF
+- Added `sidepanel/pdf-build.js` module with `handleMergePDF()` and `buildMergedPrintHTML()`
+- Added `#mergePdfBtn` (red `.btn-pdf`) to sidepanel footer
+- PDF preview page opens as a blob URL in a new tab with `window.print()` auto-triggered
+- Button enable/disable wired into `reading-list-render.js`; event listener in `sidepanel.js`
+
 #### April 22, 2026 extraction resilience + social dialog support
 - Lowered global Readability `charThreshold` from 500 → 250 in `content.js`
 - Added `buildFallbackArticle()` using highest-text-content DOM element when Readability fails
@@ -252,6 +310,13 @@ Use this section as the primary source of truth when loading this project into a
 11. Dialog extraction must remain domain-gated — never run `pickActiveDialog()` on non-social domains to avoid false positives on article pages with cookie/newsletter modals
 12. `buildFallbackArticle()` is the last-resort path; dialog extraction and Readability take priority
 13. CDN referrer rules in `rules.json` must use platform-appropriate referer values (facebook.com/instagram.com, not google.com) for social CDNs
+14. Facebook post permalink extraction (Priority 0) fires before dialog check for FB permalink URLs — but intentionally returns null when logged in so Priority 1 (dialog) handles the post overlay
+15. Never include `[role="main"]` in `FB_POST_PERMALINK_SELECTORS` — in logged-in Facebook state, `[role="main"]` contains the full feed, not the post
+16. Reader edit mode is session-only by design — edits persist to `chrome.storage.session.currentArticle` and are lost on tab refresh; no persistent annotation store exists
+17. Do NOT re-sanitize article HTML on edit mode Save — user's deliberate content changes (images, links, note blocks) would be stripped
+18. Note blocks must always be inserted with `hr.note-sep` elements above and below — the EPUB export logic checks for these siblings to decide transformation strategy
+19. `document.execCommand()` is the only viable formatting API in the Chrome extension context; it is deprecated by the web spec but functional in Chrome — do not introduce a heavy editor library without explicit product direction
+20. The PDF merge button opens a blob HTML tab; it does NOT download a .pdf file directly — Chrome's print dialog is the user's path to save
 
 ---
 
@@ -272,20 +337,41 @@ Use this section as the primary source of truth when loading this project into a
 - Confirm reader/sidepanel feedback links open `https://readeasy.featurebase.app/`
 - Confirm reader header **Merge EPUBs** opens `https://merge-epubs.vercel.app/`
 - Confirm regular article pages (Medium, BBC, Wikipedia) still extract correctly
-- Confirm logged-in Facebook post modal opens in reader view
+- Confirm logged-in Facebook post modal opens in reader view (dialog extraction path)
+- Confirm not-logged-in Facebook post permalink opens in reader view with clean content (fb-permalink extraction path)
+- Confirm FB reader view title has no notification count prefix or `| Facebook` suffix
+- Confirm FB reader view content has no scrambled date characters or repeated "Facebook" navigation text
 - Confirm reader view does NOT show extraction metadata banner to users
 - Confirm toolbar shows `!` badge when extraction fails on an unsupported page
 - Confirm floater toast appears when "Switch to reading view" fails
 - Confirm Facebook/Instagram post images load in reader tab (no 403s)
+- Confirm Edit button is visible and pastel yellow in the secondary header row
+- Confirm entering edit mode shows the toolbar and makes title/byline/body editable with blue focus rings
+- Confirm cursor appears in the article body immediately after clicking Edit (including on long articles)
+- Confirm text selection is preserved when clicking toolbar buttons (selection does not collapse)
+- Confirm Bold/Italic/Underline toggle correctly and highlight as active when selection is inside formatted text
+- Confirm font size change applies inline px styles (not HTML `size` attribute)
+- Confirm bullet list and numbered list toggle correctly
+- Confirm horizontal rule is inserted at cursor position
+- Confirm note block is inserted with HR separators above and below
+- Confirm image insert works (select a local image file via toolbar button)
+- Confirm link insert applies `href` to selected text; Apply with bare `https://` is a no-op
+- Confirm link unlink removes the `<a>` tag from selected link
+- Confirm Save button updates content visibly and shows "Article saved" toast
+- Confirm Cancel reverts all three regions (title, byline, body) to pre-edit state
+- Confirm EPUB export after edit contains the edited content
+- Confirm note blocks appear with yellow background and blue left border in EPUB (Apple Books)
+- Confirm "Merge & Create PDF" button is visible in sidepanel footer (red)
+- Confirm clicking it opens a new tab with styled merged content and print dialog auto-triggers
 
 ---
 
-> If older sections below conflict with this April 22 summary, trust this section first.
-> *(Previously: April 18 was canonical — superseded by April 22 above.)*
+> If older sections below conflict with this May 17 summary, trust this section first.
+> *(Previously: April 22 was canonical — superseded by May 17 above.)*
 
 > **For AI assistants:** Read `PROJECT_ARCHITECTURE.md` for a full deep-dive. This file is a quick orientation.
 
-> **Last updated:** April 22, 2026
+> **Last updated:** May 17, 2026
 
 ---
 
@@ -329,7 +415,8 @@ chrome-extension/
 │   ├── reading-list-add.js Add from reader/regular tab + Save Selection pipeline
 │   ├── reading-list-render.js  List rendering + inline title edit/remove + storage info
 │   ├── epub-build.js       Merged EPUB/XHTML generation logic
-│   └── x4-modal.js         Merge orchestration + X4 modal/check/send/download logic
+│   ├── x4-modal.js         Merge orchestration + X4 modal/check/send/download logic
+│   └── pdf-build.js        PDF preview — builds merged HTML blob, opens print dialog tab
 ├── sidepanel.css           Side panel styles — cards, compact add button, menu,
 │                           settings page, inline title editor, toasts
 │
@@ -474,6 +561,11 @@ chrome-extension/
 | Reader Merge EPUB shortcut | `reader.html` + `reader.js` | Reader header **Merge EPUBs** opens external merge web app |
 | CDN image fix | `rules.json` | declarativeNetRequest sets Referer for Substack, Medium |
 | Keyboard shortcuts | `reader.js` | F, Space, R, +/−, Esc |
+| Reader edit mode | `reader.html` / `reader.js` / `reader.css` | Contenteditable title+byline+body, fixed formatting toolbar, session-only save to session storage |
+| Note callout blocks | `reader.js` / `reader.css` | Yellow+blue-border callout inserted at cursor, with HR separators; EPUB-compatible via blockquote+gradient |
+| Insert image (edit mode) | `reader.js` | FileReader → base64 data URL → inserted at cursor in edit mode |
+| Insert link (edit mode) | `reader.js` | Link popover with saved-range restore; createLink/unlink via execCommand |
+| Merge & Create PDF | `sidepanel/pdf-build.js` + `sidepanel.html/js/css` | Blob HTML opened in new tab; Chrome print dialog auto-triggered for Save as PDF |
 
 ---
 
@@ -571,6 +663,40 @@ chrome-extension/
 - Added side panel footer **Share feedback & ideas** CTA
 - Both links now route users to `https://readeasy.featurebase.app/` for feedback and feature requests
 
+### May 17, 2026 — Reader Edit Mode + Toolbar Expansion + Sidepanel PDF
+
+**Reader edit mode:**
+- Added `#editBtn` (pastel yellow) in secondary header row; clicking enters edit mode
+- `#editToolbar` (fixed bar below header): Bold, Italic, Underline, Font Color, Font Size (12–36 px), Align L/C/R, Bullet List, Numbered List, Horizontal Rule, Insert Note, Insert Image, Insert/Edit Link, Save, Cancel
+- `enterEditMode()`: title + byline + body all become `contenteditable`; inline `user-select:none` / `pointer-events:none` styles stripped from extracted content; `requestAnimationFrame` + `preventScroll` ensures cursor appears even on very long articles
+- `exitEditMode(save)`: Save persists `bodyEl.innerHTML` to `chrome.storage.session.currentArticle`; Cancel reverts all three regions from snapshots
+- Font size applied via `fontSize('7')` marker trick → converted to inline `style.fontSize` in px (avoids HTML `size` attribute)
+- `insertNoteBlock()` inserts `<hr class="note-sep">` + note div + `<hr class="note-sep">` + empty para
+- `insertHorizontalRule()` inserts `<hr>` at cursor position
+- `insertImageAtCursor(file)`: FileReader → base64 data URL → `execCommand('insertHTML')`
+- Link popover bug fixed: `applyLink()` / `unlinkSelection()` now capture `savedLinkRange` into local `range` variable before `closeLinkPopover()` nulls the module-level variable
+- URL input pre-filled with `'https://'`; bare `'https://'` is a no-op in `applyLink()`
+- EPUB export updated: `.note-block` → `<blockquote>` with gradient background (Apple Books compatible); `hr.note-sep` → inline-styled; legacy notes without HR siblings get `<p>` border fallbacks
+- "Donate" button renamed "Buy me coffee"; gold gradient CSS removed
+
+**Sidepanel PDF merge:**
+- New `sidepanel/pdf-build.js` module: `handleMergePDF()` + `buildMergedPrintHTML()`
+- `#mergePdfBtn` (`.btn-pdf`, red `#c0392b`) added to sidepanel footer
+- Clicking opens a blob HTML tab (cover page, TOC, all articles with page breaks) and auto-triggers `window.print()`
+- Button enable/disable in `reading-list-render.js`; listener in `sidepanel.js`
+
+### May 17, 2026 — Facebook Post Permalink Extraction (Priority 0)
+
+- Added dedicated extraction path for Facebook post permalink URLs in `content.js`
+- `isFacebookPostPermalink()` detects `facebook.com` URLs containing `/posts/`, `/permalink.php`, or `/photos/`
+- `extractFacebookPermalink()` runs as Priority 0 in `extractArticle()`, before dialog check and Readability:
+  - **Not logged in**: finds `[data-pagelet*="Permalink"]` container, prunes FB-specific noise, returns clean article
+  - **Logged in**: no permalink pagelet found (post is a dialog overlay) → returns null → Priority 1 dialog check picks up the post modal
+- `pruneFacebookNode()`: removes standard noise plus FB-specific pagelets (`ColumnRight`, `RightRail`, `Stories`, `Composer`, `Suggested`) and ARIA roles (`navigation`, `banner`, `complementary`)
+- `removeScrambledDates()`: removes CSS-obfuscated timestamp elements — containers with ≥10 children where ≥65% are single-character text nodes
+- `cleanFacebookTitle()`: strips `(N+)` notification prefix and `| Facebook` suffix from document title
+- `[role="main"]` intentionally excluded from `FB_POST_PERMALINK_SELECTORS` — contains the full news feed in logged-in state
+
 ### April 17, 2026 — Reader Toolbar Merge Shortcut Restored
 - Removed **Download EPUB** from the reader top navigation slot
 - Restored **Merge EPUBs** in the reader top navigation
@@ -618,6 +744,9 @@ This historical note is retained for chronology only.
 - April 17 latest++ — reader toolbar restored external **Merge EPUBs** shortcut (`https://merge-epubs.vercel.app/`)
 - April 18 latest — sidepanel refactored into ES modules (`sidepanel/`), shared state store added, and `sidepanel.html` switched to `type="module"` entry-point loading
 - April 18 latest+ — floater toggle reliability hardened: disable force-cleans stale artifacts and re-enable reinjects `selection.js` across eligible open tabs
+- May 17, 2026 — Facebook post permalink extraction (Priority 0): `isFacebookPostPermalink()` + `extractFacebookPermalink()` added to `content.js`; handles both logged-in (falls through to dialog) and not-logged-in (finds permalink pagelet) states; `pruneFacebookNode()`, `removeScrambledDates()`, `cleanFacebookTitle()` helpers added
+- May 17, 2026 — Reader edit mode: `#editBtn` + `#editToolbar` added; title/byline/body all contenteditable in edit mode; full formatting toolbar (B/I/U, color, size, alignment, bullet, numbered list, HR, note, image, link); session-only save; EPUB note block export updated for Apple Books compatibility; link popover bug fixed; Donate renamed "Buy me coffee"
+- May 17, 2026 — Sidepanel Merge & Create PDF: `sidepanel/pdf-build.js` added; `#mergePdfBtn` in footer; blob HTML tab opens with auto-print for Save as PDF flow
 
 ### Quick verification checklist for continuation work
 
@@ -636,3 +765,6 @@ This historical note is retained for chronology only.
 - [ ] Internal/unsupported pages (`chrome://`, extension pages) correctly hide Save Selection
 - [ ] Reader and sidepanel feedback CTAs open Featurebase feedback portal
 - [ ] Reader header Merge EPUBs opens the external merge web app
+- [ ] Not-logged-in Facebook post permalink extracts cleanly (no repeated "Facebook" nav text, no scrambled date)
+- [ ] Logged-in Facebook post permalink extracts the post dialog content, not the news feed
+- [ ] FB reader view title is clean (no `(N+)` prefix, no `| Facebook` suffix)

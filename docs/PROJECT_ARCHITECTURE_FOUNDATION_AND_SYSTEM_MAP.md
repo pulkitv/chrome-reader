@@ -114,9 +114,22 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
   - Re-enable path injects `selection.js` across scriptable open tabs so floater recovers without manual refresh
   - `selection.js` now includes idempotent initialization and stale-reference self-healing for reinjection safety
 
+12. **Reader edit mode is implemented (May 17, 2026)**
+  - `#editBtn` (pastel yellow) in the secondary header row enters edit mode
+  - `#editToolbar` (fixed bar below header): B/I/U, font color, font size, alignment, bullet list, numbered list, HR, note block, image, link, Save, Cancel
+  - Title, byline, and body are all made `contenteditable` simultaneously; extraction-injected blocking styles are stripped on entry
+  - Save persists `#articleBody.innerHTML` to `chrome.storage.session.currentArticle` (session-only)
+  - Note blocks inserted with `hr.note-sep` separators; EPUB export converts `.note-block` → `<blockquote>` with gradient background for Apple Books compatibility
+  - Link popover bug fixed: range captured before `closeLinkPopover()` nulls it
+
+13. **Sidepanel Merge & Create PDF is implemented (May 17, 2026)**
+  - `sidepanel/pdf-build.js` new module; `#mergePdfBtn` (red) in sidepanel footer
+  - Generates a styled HTML blob (cover, TOC, all articles), opens it in a new tab, auto-triggers `window.print()`
+  - No third-party PDF library; user completes save via Chrome's print dialog "Save as PDF"
+
 ---
 
-### Chronological Timeline (Accurate Through April 18, 2026)
+### Chronological Timeline (Accurate Through May 17, 2026)
 
 #### Phase A — Foundation
 - **`0375d98`**: Initial extension architecture established (reader, extraction, save paths, EPUB basis)
@@ -204,6 +217,56 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - Added `rules.json` rule id 3 (`*fbcdn.net*` → referer `https://www.facebook.com/`) and id 4 (`*cdninstagram.com*` → referer `https://www.instagram.com/`)
 - Removed user-visible extraction metadata notice banner from `reader.js` (was showing internal `extractionMode`/char-count to users)
 
+#### Phase Q — Reader edit mode (May 17, 2026)
+- Added `#editBtn` (pastel yellow `background-color: #fef9c3`) to reader header secondary row
+- Added `#editToolbar` — fixed bar below the main header, visible only while `body.edit-mode` is active:
+  - Bold, Italic, Underline (`execCommand` toggle)
+  - Font Color (`<input type="color">` → `execCommand('foreColor')`)
+  - Font Size (select 12–36 px; implemented via `fontSize('7')` marker + immediate `<font>` → inline `style.fontSize` conversion)
+  - Align Left / Center / Right (`execCommand('justifyLeft/Center/Right')`)
+  - Bullet List (`execCommand('insertUnorderedList')`)
+  - Numbered List (`execCommand('insertOrderedList')`) ← new
+  - Horizontal Rule (`insertHorizontalRule()` → `execCommand('insertHTML', '<hr><p><br></p>')`) ← new
+  - Insert Note callout (`insertNoteBlock()`)
+  - Insert Image (`insertImageAtCursor(file)` via FileReader → base64 data URL)
+  - Insert / Edit Link (link popover with `savedLinkRange` restore)
+  - Save and Cancel
+- State variables: `isEditMode`, `preEditContent`, `preEditTitle`, `preEditByline`, `savedLinkRange`
+- `enterEditMode()`: makes `#articleTitle`, `#articleByline`, `#articleBody` all `contenteditable="true"`; snapshots all three; strips `contenteditable="false"` children and `user-select:none` / `pointer-events:none` inline styles; uses `requestAnimationFrame` + `{ preventScroll: true }` for cursor placement
+- `exitEditMode(save)`: on Save: writes `bodyEl.innerHTML` to `chrome.storage.session.currentArticle`; on Cancel: restores all three HTML snapshots; always calls `closeLinkPopover()`
+- CSS: `#articleBody[contenteditable] * { user-select: text !important; pointer-events: auto !important; }` overrides extraction-injected blocking styles; `mousedown` → `preventDefault()` on `#editToolbar` prevents focus-steal from toolbar clicks (carve-outs for `<select>`, color `<input>`, Save/Cancel)
+- `insertNoteBlock()`: inserts `<hr class="note-sep">` + `div.note-block` + `<hr class="note-sep">` + `<p><br></p>`
+- EPUB transformation updated in `downloadArticleEPUB()`: `.note-block` → `<blockquote>` with `border-left: 5px solid #0066cc` + `background: linear-gradient(to right, #fffde7, #fffde7)` (gradient avoids Apple Books' `background-color` theme override); `hr.note-sep` inline-styled; adjacent HR siblings detected so redundant separators are not added for notes that already have them
+- Link popover bug fixed: `applyLink()` and `unlinkSelection()` now capture `const range = savedLinkRange` before calling `closeLinkPopover()` (which nulls `savedLinkRange`); uses `range` for selection restoration
+- Link URL input pre-filled with `'https://'`; bare `'https://'` is treated as a no-op in `applyLink()`
+- All created links get `target="_blank"` and `rel="noopener"` applied post-`createLink`
+- Keydown guard: suppresses existing Flash It and font shortcuts while `isEditMode` is true (except Escape)
+- "Donate" button renamed "Buy me coffee"; entire `#donateBtn` CSS block with gold gradient removed
+- Edit mode is session-only: save writes to `chrome.storage.session.currentArticle`; tab refresh restarts from original extraction
+
+#### Phase R — Sidepanel Merge & Create PDF (May 17, 2026)
+- Added `sidepanel/pdf-build.js` — new ES module exporting `handleMergePDF()`
+  - Calls `getAllArticles()` to fetch all saved articles from IndexedDB
+  - `buildMergedPrintHTML(articles)` generates a styled HTML document with: cover page, TOC with anchor links per article, all articles with `page-break-after: always`, note-block + hr.note-sep CSS, `@media print` rules, `<script>window.addEventListener('load', () => window.print())</script>`
+  - Creates a `Blob` with `type: 'text/html;charset=utf-8'`, opens via `URL.createObjectURL` + `window.open(url, '_blank')`
+  - Blob URL revoked after 90 s
+- Added `#mergePdfBtn` to `sidepanel.html` footer between the EPUB and X4 buttons
+- Added `.btn-pdf { background-color: #c0392b; }` to `sidepanel.css`
+- Button enable/disable wired into `reading-list-render.js` (alongside `mergeEpubBtn` and `mergeSendX4Btn`)
+- Import and click listener wired in `sidepanel.js`
+- Button label is "Merge & Create PDF" — accurately describes the action (the user completes the save via the print dialog, not a direct download)
+
+#### Phase P — Facebook post permalink extraction (May 17, 2026)
+- Added `FB_POST_PERMALINK_SELECTORS` constant: `['[data-pagelet="PermalinkPage"]', '[data-pagelet*="Permalink"]']` — intentionally excludes `[role="main"]` (contains full feed in logged-in state)
+- Added `isFacebookPostPermalink()`: detects `facebook.com` URLs with `/posts/`, `/permalink.php`, or `/photos/` in the path
+- Added `extractFacebookPermalink()`: Priority 0 extraction path in `extractArticle()`, firing before dialog check and Readability
+  - **Not logged in**: finds `[data-pagelet*="Permalink"]` container, applies `pruneFacebookNode()` + `removeScrambledDates()`, returns article with `extractionMode: 'fb-permalink'`
+  - **Logged in**: permalink pagelet absent (post rendered as dialog overlay on feed) — returns `null` so Priority 1 (`pickActiveDialog`) handles the post modal
+- Added `pruneFacebookNode(clone)`: standard noise removal plus FB-specific pagelet removal (`ColumnRight`, `RightRail`, `Stories`, `Composer`, `Suggested`) and ARIA role removal (`complementary`, `navigation`, `banner`)
+- Added `removeScrambledDates(clone)`: detects and removes Facebook's CSS-scrambled timestamp containers — elements with ≥10 children where ≥65% are single-character text nodes (Facebook uses CSS `order` property to visually reorder individual character spans)
+- Added `cleanFacebookTitle(rawTitle)`: strips `(N+)` notification count prefix and `| Facebook` suffix from `document.title`
+- Root cause addressed: FB post permalink pages previously fell through to Readability → picked up full page including nav repeating "Facebook" and scrambled date characters
+
 ---
 
 ### Current Message Contracts You Must Preserve
@@ -259,8 +322,10 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
   - unsupported/internal pages (`chrome://`, extension pages)
 10. Floater disable/enable must be symmetric across large tab sets: disable removes all interactive/stale floaters; re-enable restores on all eligible tabs without requiring manual page refresh
 11. Dialog extraction (`pickActiveDialog`) must remain domain-gated — running it on general article pages will pick up cookie banners and newsletter modals as false positives
-12. Extraction priority order must be preserved: dialog (social-gated) → Readability → fallback DOM extraction
+12. Extraction priority order must be preserved: FB permalink (Priority 0) → dialog/social (Priority 1) → Readability → fallback DOM extraction
 13. CDN referrer rules for social platforms must use platform-specific referer values (not `google.com`) to correctly satisfy Facebook and Instagram CDN authentication
+14. `FB_POST_PERMALINK_SELECTORS` must never include `[role="main"]` — in logged-in Facebook state that element contains the full news feed, causing extraction of the wrong content
+15. `extractFacebookPermalink()` must return `null` (not throw) when no permalink pagelet is found — this is the correct behavior for logged-in state and allows Priority 1 dialog extraction to take over
 
 ---
 
@@ -281,7 +346,10 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 - [ ] Side panel auth icon supports sign-in/out and persists normalized state
 - [ ] Reader header Feedback and side panel footer feedback links both open `https://readeasy.featurebase.app/`
 - [ ] Regular article pages (Medium, Wikipedia, BBC) extract correctly after extraction resilience changes
-- [ ] Logged-in Facebook post modal opens in reader view via toolbar click
+- [ ] Logged-in Facebook post modal opens in reader view via toolbar click (dialog extraction path)
+- [ ] Not-logged-in Facebook post permalink opens in reader view with clean content (fb-permalink extraction path)
+- [ ] FB reader view title shows no notification count (`(20+)`) and no `| Facebook` suffix
+- [ ] FB reader view body contains no repeated "Facebook" nav text and no scrambled date characters
 - [ ] Reader view does NOT show extraction metadata banner
 - [ ] Toolbar shows `!` badge when extraction fails on an unsupported page
 - [ ] Floater toast appears when "Switch to reading view" fails
@@ -294,7 +362,7 @@ This file is the **primary technical reference** for the ReadEasy Chrome extensi
 
 > **Purpose**: Comprehensive reference for AI coding assistants and developers. Read this file first in any new chat — it describes every component, data flow, storage scheme, and key implementation decision in the current codebase.
 
-> **Last Updated**: April 22, 2026
+> **Last Updated**: May 17, 2026
 
 ---
 

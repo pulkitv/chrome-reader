@@ -14,6 +14,14 @@
     '[data-pagelet*="Dialog"]'
   ];
 
+  // Selectors for the main post container on Facebook post permalink pages (not-logged-in only).
+  // Intentionally excludes [role="main"] — in logged-in state that element contains the full
+  // feed, not the post. The logged-in post is a dialog overlay handled by Priority 1.
+  const FB_POST_PERMALINK_SELECTORS = [
+    '[data-pagelet="PermalinkPage"]',
+    '[data-pagelet*="Permalink"]',
+  ];
+
   // Only attempt dialog extraction on known social platforms where posts open in overlays
   const DIALOG_EXTRACTION_DOMAINS = [
     'facebook.com',
@@ -141,6 +149,86 @@
     };
   }
 
+  function isFacebookPostPermalink() {
+    const hostname = location.hostname.replace(/^www\./, '').replace(/^m\./, '');
+    if (hostname !== 'facebook.com') return false;
+    const path = location.pathname;
+    return /\/posts\//.test(path) || /\/permalink\.php/.test(path) || /\/photos\//.test(path);
+  }
+
+  function cleanFacebookTitle(rawTitle) {
+    return (rawTitle || '')
+      .replace(/^\(\d+\+?\)\s*/, '')
+      .replace(/\s*\|\s*Facebook\s*$/, '')
+      .trim();
+  }
+
+  function pruneFacebookNode(clone) {
+    clone.querySelectorAll(
+      'script, style, noscript, svg, nav, footer, header, aside, form, button, input, select, textarea'
+    ).forEach(el => el.remove());
+    [
+      '[data-pagelet*="ColumnRight"]',
+      '[data-pagelet*="RightRail"]',
+      '[data-pagelet*="Stories"]',
+      '[data-pagelet*="Composer"]',
+      '[data-pagelet*="Suggested"]',
+      '[role="complementary"]',
+      '[role="navigation"]',
+      '[role="banner"]',
+    ].forEach(sel => {
+      clone.querySelectorAll(sel).forEach(el => el.remove());
+    });
+  }
+
+  function removeScrambledDates(clone) {
+    // FB date obfuscation: container has ≥10 children each with ≤1 char visible text
+    clone.querySelectorAll('span, a, div').forEach(el => {
+      if (!el.parentNode) return;
+      const children = Array.from(el.children);
+      if (children.length < 10) return;
+      const singleCharCount = children.filter(c => c.textContent.trim().length <= 1).length;
+      if (singleCharCount / children.length >= 0.65) {
+        el.remove();
+      }
+    });
+  }
+
+  function extractFacebookPermalink() {
+    let root = null;
+    for (const sel of FB_POST_PERMALINK_SELECTORS) {
+      const el = document.querySelector(sel);
+      if (el && getVisibleTextLengthFromElement(el) >= FALLBACK_MIN_VISIBLE_TEXT_CHARS) {
+        root = el;
+        break;
+      }
+    }
+    if (!root) return null;
+
+    const clone = root.cloneNode(true);
+    pruneFacebookNode(clone);
+    removeScrambledDates(clone);
+    makeUrlsAbsolute(clone, document.location.href);
+
+    const visibleText = normalizeText(clone.textContent);
+    if (visibleText.length < FALLBACK_MIN_VISIBLE_TEXT_CHARS) return null;
+
+    return {
+      title: cleanFacebookTitle(document.title) || 'Facebook Post',
+      byline: '',
+      content: clone.innerHTML,
+      textContent: visibleText,
+      length: visibleText.length,
+      excerpt: visibleText.slice(0, 240),
+      siteName: 'Facebook',
+      publishedTime: null,
+      extractionMode: 'fb-permalink',
+      isFallback: true,
+      visibleTextChars: visibleText.length,
+      isThinContent: visibleText.length < 300,
+    };
+  }
+
   /**
    * Find an active modal/dialog in the live DOM with sufficient text content.
    * Only fires on known social domains to avoid interfering with regular article pages.
@@ -200,6 +288,12 @@
    * Extract article using Readability
    */
   function extractArticle() {
+    // Priority 0: Facebook post permalink (logged-in full-page view, no dialog wrapper)
+    if (isFacebookPostPermalink()) {
+      const fbArticle = extractFacebookPermalink();
+      if (fbArticle) return fbArticle;
+    }
+
     // Priority 1: active modal/dialog (logged-in Facebook posts, Instagram overlays, Reddit)
     const activeDialog = pickActiveDialog();
     if (activeDialog) {

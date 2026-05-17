@@ -34,6 +34,30 @@
 | `preloadImages()` | 1450 | Converts images to data URLs |
 | `emailArticleEPUB()` | 1650 | Opens email with EPUB attachment |
 
+### Edit Mode (`reader.js`)
+
+| Function | Purpose |
+|----------|---------|
+| `enterEditMode()` | Makes title/byline/body contenteditable; strips blocking inline styles; places cursor via RAF |
+| `exitEditMode(save)` | Save: persists to session storage; Cancel: reverts snapshots; always closes link popover |
+| `execFormatCmd(cmd, value)` | Thin wrapper around `document.execCommand` for the active contenteditable element |
+| `applyFontSize(px)` | `fontSize('7')` marker trick → converts `<font size="7">` to inline `style.fontSize` |
+| `insertNoteBlock()` | Inserts HR + `.note-block` + HR + empty paragraph at cursor |
+| `insertHorizontalRule()` | Inserts plain `<hr>` + empty paragraph at cursor |
+| `insertImageAtCursor(file)` | FileReader → base64 data URL → `execCommand('insertHTML')` |
+| `openLinkPopover()` | Snapshots selection range; pre-fills URL input; shows link popover |
+| `applyLink()` | Captures range before closing popover; restores range; `execCommand('createLink')` |
+| `unlinkSelection()` | Captures range before closing popover; restores range; `execCommand('unlink')` |
+| `closeLinkPopover()` | Hides popover; nulls `savedLinkRange` |
+| `updateToolbarState()` | Debounced 30 ms; reflects B/I/U active state via `queryCommandState` |
+
+### PDF Merge (`sidepanel/pdf-build.js`)
+
+| Function | Purpose |
+|----------|---------|
+| `handleMergePDF()` | Entry point: fetches articles, builds HTML, opens blob URL, auto-triggers print |
+| `buildMergedPrintHTML(articles)` | Generates full styled HTML string with cover, TOC, article sections, print CSS |
+
 ### Content Extraction (`content.js`)
 
 | Function | Line | Purpose |
@@ -248,6 +272,38 @@ else displayTime *= 1.5;                       // Very long
   - Send/Download disabled only while latest regeneration is in-flight
   - Previous valid blob is retained on regeneration failure
 
+### May 17, 2026 - Reader Edit Mode
+
+**Changes**:
+1. **Edit button** — Pastel yellow `#editBtn` added to secondary header row; visually distinct from other nav actions
+2. **Edit toolbar** — Fixed bar below header (`#editToolbar`), shown only when `body.edit-mode` is active:
+   - Bold, Italic, Underline (execCommand toggle)
+   - Font Color (native color picker → `foreColor`)
+   - Font Size 12–36 px (marker trick: `fontSize('7')` → inline `style.fontSize` in px)
+   - Align Left / Center / Right
+   - Bullet List (unordered) and Numbered List (ordered)
+   - Horizontal Rule insert
+   - Insert Note callout block (with HR separators above/below)
+   - Insert Image (FileReader → base64 data URL)
+   - Insert/Edit Link (link popover)
+   - Save and Cancel
+3. **Contenteditable scope expanded** — Title, byline, and body all become editable simultaneously; extraction-injected `user-select:none` / `pointer-events:none` styles stripped on entry; child `contenteditable="false"` attributes removed
+4. **Cursor reliability** — `requestAnimationFrame` + `{ preventScroll: true }` ensures cursor appears even on very long articles; `caretRangeFromPoint` body click handler with collapsed-range guard preserves drag/triple-click selections
+5. **Session-only save** — Save writes `#articleBody.innerHTML` to `chrome.storage.session.currentArticle`; all downstream actions (TTS, Flash It, EPUB, Add to List) automatically use edited content
+6. **EPUB note block update** — `.note-block` → `<blockquote>` with gradient background (Apple Books compatible); `hr.note-sep` inline-styled; backward-compatible with legacy notes lacking HR siblings
+7. **Link popover bug fix** — `applyLink()` and `unlinkSelection()` now capture `savedLinkRange` into local `range` before `closeLinkPopover()` nulls the module variable; link was silently not applied before this fix
+8. **Link URL pre-fill** — Input pre-filled with `'https://'`; bare `'https://'` treated as no-op
+9. **Donate → Buy me coffee** — Button renamed and gold gradient CSS removed
+
+### May 17, 2026 - Sidepanel Merge & Create PDF
+
+**Changes**:
+1. **New module** — `sidepanel/pdf-build.js` with `handleMergePDF()` and `buildMergedPrintHTML()`
+2. **Print-ready HTML** — Cover page, TOC with anchor links, all articles with `page-break-after`, note-block styling, `@media print` rules, auto-`window.print()` on tab load
+3. **Blob URL approach** — No PDF library bundled; blob HTML opened via `window.open()`; 90 s revoke timeout
+4. **Button** — Red `#mergePdfBtn` (`.btn-pdf`) in sidepanel footer; enable/disable in `reading-list-render.js`; listener and import in `sidepanel.js`
+5. **Label** — "Merge & Create PDF" (not "Download PDF") — accurately reflects that the user completes the save via the print dialog
+
 ---
 
 ## Future Enhancement Ideas
@@ -273,20 +329,22 @@ else displayTime *= 1.5;                       // Very long
 
 ## Quick Reference: Where to Find Things
 
-| Looking for... | File | Line Range |
-|---------------|------|------------|
-| Article extraction logic | content.js | 40-250 |
-| Flash It engine | reader.js | 467-1100 |
-| EPUB generation | reader.js | 1200-1700 |
-| Theme definitions | reader.css | 1-100 |
-| Event listeners setup | reader.js | 180-400 |
-| Storage operations | reader.js | Throughout |
-| Image URL fixes | content.js | 150-200 |
-| Toolbar HTML | reader.html | 20-120 |
-| Keyboard shortcuts | reader.js | 320-380 |
-| CDN referrer rules | rules.json | All |
-| X4 modal workflow | sidepanel.js / sidepanel.html | X4 handlers + modal section |
-| Exclude Images regeneration guards | sidepanel.js | `regenerateX4BlobForModal()` |
+| Looking for... | File | Notes |
+|---------------|------|-------|
+| Article extraction logic | content.js | `extractArticle()`, `pickActiveDialog()`, `extractFacebookPermalink()` |
+| Flash It engine | reader.js | `startFlashIt()` through `stopFlashIt()` |
+| EPUB generation (single article) | reader.js | `downloadArticleEPUB()` |
+| EPUB generation (merged) | sidepanel/epub-build.js | `buildMergedEPUBBlob()` |
+| PDF merge (sidepanel) | sidepanel/pdf-build.js | `handleMergePDF()`, `buildMergedPrintHTML()` |
+| Edit mode entry/exit | reader.js | `enterEditMode()`, `exitEditMode()` |
+| Edit mode formatting | reader.js | `execFormatCmd()`, `applyFontSize()`, `insertNoteBlock()`, `insertHorizontalRule()` |
+| Edit mode link popover | reader.js | `openLinkPopover()`, `applyLink()`, `unlinkSelection()` |
+| Theme definitions | reader.css | CSS custom properties at top |
+| Event listeners setup | reader.js | `setupEventListeners()` |
+| CDN referrer rules | rules.json | All rules |
+| X4 modal workflow | sidepanel/x4-modal.js | `openX4Modal()`, `regenerateX4BlobForModal()` |
+| Sidepanel button enable/disable | sidepanel/reading-list-render.js | `renderArticleList()` |
+| FB permalink extraction | content.js | `isFacebookPostPermalink()`, `extractFacebookPermalink()`, `pruneFacebookNode()` |
 
 ---
 
@@ -318,5 +376,5 @@ else displayTime *= 1.5;                       // Very long
 
 ---
 
-**End of Document** - Last updated: April 18, 2026
+**End of Document** - Last updated: May 17, 2026
 

@@ -358,6 +358,17 @@ button:disabled {
   background-color: #218838;
 }
 
+.btn-pdf {
+  background-color: #c0392b;
+  color: white;
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-pdf:hover:not(:disabled) {
+  background-color: #a93226;
+}
+
 .btn-x4 {
   background-color: #0b67d1;
   color: white;
