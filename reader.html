@@ -7,7 +7,7 @@
   <title>ReadEasy</title>
   <link rel="stylesheet" href="reader.css">
 </head>
-<body class="light-theme">
+<body class="sepia-theme">
   <!-- Header with controls -->
   <header class="reader-header">
     <div class="header-content">
@@ -17,6 +17,28 @@
             <path d="M18 6L6 18M6 6l12 12"/>
           </svg>
         </button>
+
+        <!-- Auth button -->
+        <div class="reader-auth-wrap">
+          <button id="readerAuthBtn" class="icon-btn auth-btn signed-out" title="Sign in with Google" aria-label="Sign in with Google" aria-haspopup="true" aria-expanded="false" type="button">
+            <span id="readerAuthGuestIcon" class="auth-guest-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              </svg>
+            </span>
+            <img id="readerAuthAvatar" class="auth-avatar" alt="Profile" hidden />
+          </button>
+          <div id="readerAuthDropdown" class="reader-auth-dropdown" hidden>
+            <div class="auth-menu-profile">
+              <img id="readerAuthMenuAvatar" class="auth-menu-avatar" alt="Profile avatar" hidden />
+              <div class="auth-menu-text">
+                <div id="readerAuthMenuName" class="auth-menu-name">Guest</div>
+                <div id="readerAuthMenuEmail" class="auth-menu-email">Not signed in</div>
+              </div>
+            </div>
+            <button id="readerAuthSignOutBtn" class="reader-auth-menu-item" type="button" hidden>Sign out</button>
+          </div>
+        </div>
       </div>
       
       <div class="header-right">
@@ -97,17 +119,7 @@
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
             </button>
-            <button id="mergeEpubBtn" class="icon-btn text-btn icon-text-btn" title="Merge EPUBs">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="8" height="8" rx="1"/>
-                <rect x="13" y="3" width="8" height="8" rx="1"/>
-                <rect x="3" y="13" width="8" height="8" rx="1"/>
-                <rect x="13" y="13" width="8" height="8" rx="1"/>
-                <path d="M7 7l10 10M17 7l-10 10"/>
-              </svg>
-              <span>Merge EPUBs</span>
-            </button>
-            <button id="emailEpubBtn" class="icon-btn" title="Email EPUB">
+<button id="emailEpubBtn" class="icon-btn" title="Email EPUB">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                 <polyline points="22,6 12,13 2,6"/>
@@ -130,14 +142,14 @@
         </div>
         <div class="header-row header-row-secondary">
           <div class="audio-control">
-            <button id="ttsSendBtn" class="icon-btn text-btn icon-text-btn" title="Beta View">
+            <button id="ttsSendBtn" class="icon-btn text-btn icon-text-btn" title="Open in ReadEasy">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 3h7v7"/>
                 <path d="M10 14L21 3"/>
                 <path d="M21 14v7h-7"/>
                 <path d="M3 10V3h7"/>
               </svg>
-              <span>Beta View</span>
+              <span>Open in ReadEasy</span>
             </button>
             <select id="ttsVoiceSelect" class="mode-select" title="Voice">
               <option value="default">Default voice</option>
@@ -184,6 +196,18 @@
         <path d="M9 3L5 21M19 3l-4 18M5 9h16M3 15h16"/>
       </svg>
       <input type="color" id="editFontColor" value="#000000" tabindex="-1">
+    </label>
+
+    <!-- Highlight colors -->
+    <button class="edit-highlight-swatch" data-color="#FFE066" title="Highlight yellow" style="background:#FFE066"></button>
+    <button class="edit-highlight-swatch" data-color="#A8F0A8" title="Highlight green"  style="background:#A8F0A8"></button>
+    <button class="edit-highlight-swatch" data-color="#A8D8FF" title="Highlight blue"   style="background:#A8D8FF"></button>
+    <button class="edit-highlight-swatch" data-color="#FFB3B3" title="Highlight red"    style="background:#FFB3B3"></button>
+    <button class="edit-highlight-swatch" data-color="transparent" title="Remove highlight" style="background:#fff;border:1px dashed #aaa;position:relative" aria-label="Remove highlight">
+      <svg width="10" height="10" viewBox="0 0 10 10" style="position:absolute"><line x1="1" y1="1" x2="9" y2="9" stroke="#c00" stroke-width="1.5"/><line x1="9" y1="1" x2="1" y2="9" stroke="#c00" stroke-width="1.5"/></svg>
+    </button>
+    <label class="edit-highlight-swatch edit-highlight-custom" title="Custom highlight color" style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)">
+      <input type="color" id="editHighlightColor" value="#ffff00" tabindex="-1">
     </label>
 
     <!-- Font size -->
@@ -378,6 +402,6 @@
   </div>
 
   <script src="libs/jszip.min.js"></script>
-  <script src="reader.js"></script>
+  <script src="reader.js" type="module"></script>
 </body>
 </html>

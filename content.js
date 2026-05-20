@@ -32,6 +32,116 @@
     'linkedin.com'
   ];
 
+  // ── ChatGPT conversation extractor ─────────────────────────────────────────
+
+  function isChatGPT() {
+    const host = location.hostname.replace(/^www\./, '');
+    return host === 'chatgpt.com' || host === 'chat.openai.com';
+  }
+
+  function extractChatGPT() {
+    // ChatGPT renders messages as <div data-message-author-role="user|assistant">.
+    // There are no <article> wrappers in the current DOM (verified May 2026).
+    // Each role-div is a direct message container; its first child with class
+    // "text-message" (or similar) holds the actual prose/code/images.
+
+    const turns = Array.from(document.querySelectorAll('[data-message-author-role]'));
+    if (!turns.length) return null;
+
+    // De-duplicate: if a role element is a descendant of another role element, skip it
+    // (handles nested structures where the outer and inner both have the attribute)
+    const topLevelTurns = turns.filter(el => !el.parentElement.closest('[data-message-author-role]'));
+    if (!topLevelTurns.length) return null;
+
+    const parts = topLevelTurns.map(turn => {
+      const role = turn.getAttribute('data-message-author-role');
+      const isUser = role === 'user';
+      const label = isUser ? 'You' : 'ChatGPT';
+
+      const clone = turn.cloneNode(true);
+
+      // Strip action buttons, toolbars, copy overlays, reaction buttons, svg icons
+      clone.querySelectorAll([
+        'button',
+        'form',
+        'input',
+        'select',
+        'textarea',
+        '[role="toolbar"]',
+        '[role="group"]',
+        '[data-testid*="copy"]',
+        '[data-testid*="thumb"]',
+        '[data-testid*="downvote"]',
+        '[data-testid*="upvote"]',
+        '[data-testid*="share"]',
+        '[data-testid*="regenerate"]',
+        '[data-testid*="composer"]',
+        'svg',
+      ].join(', ')).forEach(el => el.remove());
+
+      // Make image src absolute so images load in reader view
+      makeUrlsAbsolute(clone, document.location.href);
+
+      // Reset positioning on all elements — ChatGPT uses position:absolute/fixed
+      // extensively in its React layout; those inline styles cause images and divs
+      // to overlay text when rendered in the flat reader view DOM.
+      clone.querySelectorAll('*').forEach(el => {
+        const s = el.style;
+        if (!s) return;
+        const pos = s.position;
+        if (pos === 'absolute' || pos === 'fixed' || pos === 'sticky') {
+          s.position = 'relative';
+        }
+        // Also reset transforms and z-index that can push elements out of flow
+        if (s.transform) s.transform = '';
+        if (s.zIndex)    s.zIndex = '';
+      });
+
+      // Normalize images: remove any inline sizing that distorts proportions
+      clone.querySelectorAll('img').forEach(img => {
+        img.style.cssText = 'max-width:100%;height:auto;display:block;margin:12px 0;border-radius:6px';
+        img.removeAttribute('width');
+        img.removeAttribute('height');
+      });
+
+      // Style code blocks inline
+      clone.querySelectorAll('pre').forEach(pre => {
+        pre.style.cssText = 'background:#f4f4f4;padding:12px 16px;border-radius:6px;overflow:auto;font-size:0.88em;white-space:pre-wrap;margin:12px 0';
+      });
+
+      const innerHTML = clone.innerHTML.trim();
+      if (!innerHTML) return '';
+
+      return `<section class="chat-turn chat-turn--${isUser ? 'user' : 'assistant'}">` +
+               `<h3 class="chat-turn-label">${label}</h3>` +
+               innerHTML +
+             `</section>`;
+    }).filter(Boolean);
+
+    if (!parts.length) return null;
+
+    const html = `<div class="chat-conversation">${parts.join('\n')}</div>`;
+    const fullText = normalizeText(topLevelTurns.map(t => t.textContent).join(' '));
+
+    const rawTitle = (document.querySelector('title') || {}).textContent || '';
+    const title = rawTitle.replace(/\s*[-|]\s*ChatGPT\s*$/i, '').trim() || 'ChatGPT Conversation';
+
+    return {
+      title,
+      byline: 'ChatGPT',
+      content: html,
+      textContent: fullText,
+      length: fullText.length,
+      excerpt: fullText.slice(0, 240),
+      siteName: 'ChatGPT',
+      publishedTime: null,
+      extractionMode: 'chatgpt',
+      isFallback: false,
+      visibleTextChars: fullText.length,
+      isThinContent: fullText.length < 300
+    };
+  }
+
   /**
    * Convert relative URLs to absolute URLs
    */
@@ -288,7 +398,13 @@
    * Extract article using Readability
    */
   function extractArticle() {
-    // Priority 0: Facebook post permalink (logged-in full-page view, no dialog wrapper)
+    // Priority 0a: ChatGPT — collect all conversation turns in order
+    if (isChatGPT()) {
+      const chatArticle = extractChatGPT();
+      if (chatArticle) return chatArticle;
+    }
+
+    // Priority 0b: Facebook post permalink (logged-in full-page view, no dialog wrapper)
     if (isFacebookPostPermalink()) {
       const fbArticle = extractFacebookPermalink();
       if (fbArticle) return fbArticle;

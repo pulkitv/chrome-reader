@@ -274,12 +274,26 @@ chrome.runtime.onInstalled.addListener(() => {
     title: 'Open Reading List',
     contexts: ['action']
   });
+  chrome.contextMenus.create({
+    id: 'openReaderView',
+    title: 'ReadEasy Reader View',
+    contexts: ['page', 'selection', 'link'],
+    documentUrlPatterns: ['http://*/*', 'https://*/*']
+  });
 });
 
 // Handle context menu clicks
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'openReadingList') {
     chrome.sidePanel.open({ windowId: tab.windowId });
+  }
+  if (info.menuItemId === 'openReaderView') {
+    try {
+      await openReaderViewForTab(tab);
+    } catch (error) {
+      console.error('[ReadEasy] Context menu reader view failed:', error);
+      await showActionFailureBadge(error && error.message ? error.message : 'Failed to open Reader View');
+    }
   }
 });
 
@@ -592,13 +606,22 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         forceRemoveFloaterArtifacts(tab.id);
       }
 
-      // Recovery path: when enabling, ensure selection.js exists in all eligible
-      // open tabs so the floater can be recreated immediately without refresh.
+      // Recovery path: when enabling, re-inject selection.js only if the content
+      // script is not already running in that tab (e.g. after a browser restart or
+      // a tab that was open before the extension was installed). If the script is
+      // already alive it already received the floaterSettingChanged message above
+      // and will render the button itself — injecting a second instance would
+      // create two competing instances that trample each other's DOM nodes.
       if (newValue === true) {
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['selection.js']
-        }).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, { action: 'ping' })
+          .then(() => { /* already alive — nothing to do */ })
+          .catch(() => {
+            // No response: content script is absent, safe to inject
+            chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: ['selection.js']
+            }).catch(() => {});
+          });
       }
     }
   });

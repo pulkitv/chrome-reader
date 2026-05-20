@@ -250,8 +250,42 @@
       });
     });
 
+    const menuDivider = document.createElement('div');
+    menuDivider.style.cssText = 'height:1px;background:rgba(0,0,0,0.08);margin:2px 4px';
+
+    const hideLauncherBtn = document.createElement('button');
+    hideLauncherBtn.type = 'button';
+    hideLauncherBtn.setAttribute('role', 'menuitem');
+    hideLauncherBtn.textContent = 'Hide launcher';
+    hideLauncherBtn.style.cssText = [
+      'width:100%',
+      'border:none',
+      'background:transparent',
+      'padding:8px 10px',
+      'text-align:left',
+      'font-size:13px',
+      'color:#6b7280',
+      'border-radius:8px',
+      'cursor:pointer'
+    ].join(';');
+    hideLauncherBtn.addEventListener('mouseenter', () => {
+      hideLauncherBtn.style.background = '#f3f4f6';
+    });
+    hideLauncherBtn.addEventListener('mouseleave', () => {
+      hideLauncherBtn.style.background = 'transparent';
+    });
+    hideLauncherBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFloatingMenu();
+      chrome.storage.sync.set({ [FLOATING_BUTTON_ENABLED_KEY]: false });
+      chrome.runtime.sendMessage({ action: 'floaterSettingChanged', enabled: false }).catch(() => {});
+    });
+
     floatingMenu.appendChild(readViewBtn);
     floatingMenu.appendChild(sidePanelBtn);
+    floatingMenu.appendChild(menuDivider);
+    floatingMenu.appendChild(hideLauncherBtn);
     document.body.appendChild(floatingMenu);
     ensureMenuListeners();
   }
@@ -386,6 +420,7 @@
     }, true);
 
     floatingBtn.addEventListener('click', (e) => {
+      if (floatingMenu && floatingMenu.contains(e.target)) return;
       e.preventDefault();
       e.stopPropagation();
       if (dragStarted) {
@@ -586,7 +621,11 @@
   });
 
   // Also handle direct broadcast from background (covers dormant/background tabs)
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.action === 'ping') {
+      sendResponse({ alive: true });
+      return;
+    }
     if (message.action !== 'floaterSettingChanged') return;
     const nextValue = message.enabled;
     if (typeof nextValue === 'boolean') {

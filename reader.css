@@ -93,6 +93,106 @@ body {
   gap: 12px;
 }
 
+/* ── Reader auth button & dropdown ────────────────────────────────────────── */
+.reader-auth-wrap {
+  position: relative;
+}
+
+#readerAuthBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+#readerAuthBtn.signed-in {
+  border-color: rgba(11, 103, 209, 0.45);
+}
+
+#readerAuthBtn .auth-guest-icon {
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#readerAuthBtn .auth-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: none;
+}
+
+#readerAuthBtn.signed-in .auth-avatar   { display: block; }
+#readerAuthBtn.signed-in .auth-guest-icon { display: none; }
+
+.reader-auth-dropdown {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  min-width: 210px;
+  background: var(--header-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  padding: 6px;
+  z-index: 1000;
+}
+
+.reader-auth-dropdown .auth-menu-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 6px;
+}
+
+.reader-auth-dropdown .auth-menu-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.reader-auth-dropdown .auth-menu-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-color);
+  line-height: 1.2;
+}
+
+.reader-auth-dropdown .auth-menu-email {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.reader-auth-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.reader-auth-menu-item:hover {
+  background: var(--border-color);
+}
+
 .header-right {
   display: flex;
   flex-direction: column;
@@ -986,6 +1086,43 @@ body.edit-mode .edit-toolbar {
 .edit-italic { font-style: italic; }
 .edit-underline { text-decoration: underline; }
 
+/* Highlight color swatches */
+.edit-highlight-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.18);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.edit-highlight-swatch:hover {
+  transform: scale(1.2);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+
+/* Custom highlight color label — rainbow swatch that opens a color picker */
+.edit-highlight-custom {
+  position: relative;
+  cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.18);
+}
+.edit-highlight-custom input[type="color"] {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
 /* Font color label wraps a hidden color input */
 .edit-color-label {
   position: relative;
@@ -1154,4 +1291,62 @@ hr.note-sep {
 .edit-link-close-btn:hover {
   color: var(--text-color);
   background-color: var(--border-color);
+}
+
+/* ── ChatGPT conversation view ──────────────────────────────────────────── */
+
+.chat-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.chat-turn {
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.chat-turn--user {
+  background: rgba(0, 0, 0, 0.04);
+  border-left: 3px solid var(--link-color);
+}
+
+.dark-theme .chat-turn--user {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.chat-turn--assistant {
+  background: transparent;
+}
+
+.chat-turn-label {
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 10px 0;
+  padding: 0;
+  border: none;
+}
+
+/* Force all elements inside a chat turn into normal document flow.
+   ChatGPT's React layout relies on position:absolute/fixed which
+   causes overlapping when rendered in the flat reader view. */
+.chat-turn * {
+  position: relative !important;
+  transform: none !important;
+  z-index: auto !important;
+  float: none !important;
+}
+
+/* Images: natural proportions, block layout, no inline sizing */
+.chat-turn img {
+  max-width: 100% !important;
+  height: auto !important;
+  width: auto !important;
+  display: block !important;
+  margin: 12px 0 !important;
+  border-radius: 6px;
+  object-fit: contain !important;
 }
