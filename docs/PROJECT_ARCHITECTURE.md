@@ -1,6 +1,6 @@
 # ReadEasy Extension — Architecture Hub
 
-> Last updated: May 17, 2026
+> Last updated: May 25, 2026
 
 This file is the entry point for architecture and implementation details.
 
@@ -26,8 +26,16 @@ Read them in order.
 ### Reader surface
 
 - `reader.html` — reader UI shell
-- `reader.js` — reader logic (rendering, preferences, Flash It, TTS, exports, add-to-list)
+- `reader.js` — ~160-line ES-module entry-point; boots page, wires events
 - `reader.css` — themes/layout/progress/toast styling
+- `reader/state.js` — shared reader state and constants
+- `reader/article.js` — article load, sanitise, save, auto-save, toast
+- `reader/preferences.js` — theme, font size, width, progress bar
+- `reader/auth.js` — reader header auth UI and sign-in/out handlers
+- `reader/edit-mode.js` — full edit-mode logic (formatting, links, images, notes)
+- `reader/tts.js` — TTS playback and web-app handoff
+- `reader/flash-it.js` — Flash It speed-reading engine
+- `reader/epub.js` — single-article EPUB / HTML download / email-EPUB
 
 ### Side panel surface
 
@@ -57,15 +65,26 @@ Read them in order.
 ### Root runtime/config files
 
 - `manifest.json` — extension manifest and capability declarations
-- `background.js` — service worker orchestration and cross-surface messaging
-- `content.js` — extraction logic injected into webpage context
-- `selection.js` — Save Selection and floating launcher on regular pages
+- `background.js` — service worker orchestration, cross-surface messaging, context menu
+- `content.js` — extraction logic (ChatGPT → FB permalink → dialog → Readability → fallback)
+- `selection.js` — Save Selection responder + floating launcher/menu + ping responder
 - `db.js` — IndexedDB helper API for extension pages
-- `reader.html` / `reader.js` / `reader.css` — full reader experience
+- `reader.html` / `reader.js` / `reader/` / `reader.css` — full reader experience (ES-module split)
 - `sidepanel.html` / `sidepanel.js` / `sidepanel.css` — side panel shell + entry
 - `privacy-policy.html` — public privacy policy page
 - `readeasy-postmessage-listener.js` — web app helper for postMessage handoff
 - `rules.json` — network header rewrite rules for blocked image CDNs
+
+### Reader module files (`reader/`)
+
+- `reader/state.js` — shared reader state and constants
+- `reader/article.js` — article loading, sanitisation, lazy loading, reading-list save, notification toast
+- `reader/preferences.js` — theme, font size, reading width, progress bar, preference persistence
+- `reader/auth.js` — reader header auth UI, sign-in/out handlers, `authUpdated` message handler
+- `reader/edit-mode.js` — full edit-mode logic: enter/exit, formatting commands, links, images, notes
+- `reader/tts.js` — Text-to-Speech playback, voice selection, `sendArticleToWebapp`
+- `reader/flash-it.js` — Flash It speed-reading engine (start/pause/resume/restart/stop, 3 modes)
+- `reader/epub.js` — single-article EPUB generation, HTML download, email-EPUB modal
 
 ### Side panel module files
 

@@ -14,6 +14,13 @@ const EXTRACTION_RETRY_DELAYS_MS = [0, 350, 900];
 
 let inMemoryAuthToken = null;
 
+// In-memory cache of panelDisplayState — lets action/context-menu handlers call
+// chrome.sidePanel.open() without any preceding await (user gesture must stay fresh).
+let _panelDisplayState = 'open';
+chrome.storage.sync.get('panelDisplayState').then(({ panelDisplayState }) => {
+  _panelDisplayState = panelDisplayState || 'open';
+}).catch(() => {});
+
 function getSignedOutAuthState() {
   return {
     isSignedIn: false,
@@ -263,6 +270,22 @@ async function getOldestArticle() {
   });
 }
 
+async function getArticleById(id) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => db.close();
+  });
+}
+
+function htmlToText(html) {
+  return (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 // ======================
 // Chrome Extension Handlers
 // ======================
@@ -288,6 +311,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     chrome.sidePanel.open({ windowId: tab.windowId });
   }
   if (info.menuItemId === 'openReaderView') {
+    if (_panelDisplayState !== 'user-closed') {
+      chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+    }
     try {
       await openReaderViewForTab(tab);
     } catch (error) {
@@ -407,13 +433,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     try {
       if (message.action === 'saveToReadingList') {
-        // Deduplicate — don't save if this URL is already in the list
         const { readingListMeta: existingMeta = [] } = await chrome.storage.local.get('readingListMeta');
-        const alreadySaved = existingMeta.some(item => item.url === message.article.url);
-        if (alreadySaved) {
-          console.log('Article already in reading list, skipping duplicate:', message.article.url);
-          sendResponse({ success: true, duplicate: true });
-          return;
+
+        // Content-based deduplication: same URL + identical text → skip.
+        // Same URL but different content → save as a new entry.
+        const sameUrlEntries = existingMeta.filter(item => item.url === message.article.url);
+        if (sameUrlEntries.length > 0) {
+          const mostRecent = sameUrlEntries[sameUrlEntries.length - 1];
+          const stored = await getArticleById(mostRecent.id);
+          if (stored) {
+            const storedText = htmlToText(stored.htmlContent || '');
+            const newText    = htmlToText(message.article.htmlContent || '');
+            if (storedText === newText) {
+              sendResponse({ success: true, duplicate: true });
+              return;
+            }
+            // Content differs — fall through and save as a new entry
+          }
         }
 
         // Check if at capacity (10 articles)
@@ -476,19 +512,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
       }
       else if (message.action === 'openSidePanel') {
-        // Open the side panel for the sender's tab
+        // Open the panel first — sidePanel.open() requires the user gesture to still be live.
+        // Any await before this call would expire the gesture.
+        _panelDisplayState = 'open';
         const windowId = sender.tab ? sender.tab.windowId : undefined;
         if (windowId) {
           await chrome.sidePanel.open({ windowId });
         }
+        // Write state after the panel opens (gesture already consumed)
+        chrome.storage.sync.set({ panelDisplayState: 'open' }).catch(() => {});
         sendResponse({ success: true });
       }
       else if (message.action === 'openReaderView') {
-        if (!sender.tab) {
+        if (!sender.tab || !sender.tab.id) {
           throw new Error('No sender tab for reader view');
         }
 
-        await openReaderViewForTab(sender.tab);
+        // Open side panel first (no await before this — user gesture must stay live)
+        if (_panelDisplayState !== 'user-closed' && sender.tab.windowId) {
+          chrome.sidePanel.open({ windowId: sender.tab.windowId }).catch(() => {});
+        }
+
+        // Use chrome.tabs.get for a fully-populated Tab object — sender.tab from a
+        // content script message may be missing fields like `url` in some contexts.
+        const tab = await chrome.tabs.get(sender.tab.id);
+        await openReaderViewForTab(tab);
         sendResponse({ success: true });
       }
       else if (message.action === 'updateArticleTitle') {
@@ -593,6 +641,9 @@ async function forceRemoveFloaterArtifacts(tabId) {
 }
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'sync' && changes.panelDisplayState) {
+    _panelDisplayState = changes.panelDisplayState.newValue || 'open';
+  }
   if (areaName !== 'sync' || !(FLOATING_BUTTON_ENABLED_KEY in changes)) return;
   const newValue = changes[FLOATING_BUTTON_ENABLED_KEY].newValue;
   chrome.tabs.query({}, (tabs) => {
@@ -629,6 +680,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 // Handle extension icon click
 chrome.action.onClicked.addListener(async (tab) => {
+  // Open side panel first — no await before this call so the user gesture stays fresh.
+  if (_panelDisplayState !== 'user-closed') {
+    chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+  }
   try {
     await openReaderViewForTab(tab);
   } catch (error) {

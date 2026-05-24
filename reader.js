@@ -23,7 +23,8 @@ import { state }                    from './reader/state.js';
 
 import {
   loadArticle,
-  handleAddToReadingList
+  handleAddToReadingList,
+  autoSaveToReadingList
 }                                   from './reader/article.js';
 
 import {
@@ -104,6 +105,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   loadPreferences();
   updateProgressBar();
+
+  // Fire-and-forget: silently save article; must not block or throw in reader
+  autoSaveToReadingList();
 });
 
 // ── Event wiring ──────────────────────────────────────────────────────────────

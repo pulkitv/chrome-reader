@@ -75,12 +75,20 @@ export function applyReaderAuthUI() {
   btn.classList.toggle('signed-out', !isSignedIn);
 
   if (hasPicture) {
+    avatar.onerror = () => {
+      avatar.removeAttribute('src');
+      avatar.hidden    = true;
+      guestIcon.hidden = false;
+      btn.classList.remove('signed-in');
+      btn.classList.add('signed-out');
+    };
     avatar.src       = profile.picture;
     avatar.hidden    = false;
     guestIcon.hidden = true;
     menuAvatar.src   = profile.picture;
     menuAvatar.hidden = false;
   } else {
+    avatar.onerror    = null;
     avatar.removeAttribute('src');
     avatar.hidden     = true;
     guestIcon.hidden  = false;

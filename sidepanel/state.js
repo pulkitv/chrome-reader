@@ -18,6 +18,10 @@ export const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
 export const AUTH_STATE_KEY            = 'authState';
 export const AUTH_PROVIDER_GOOGLE      = 'google';
 
+export const PANEL_DISPLAY_STATE_KEY = 'panelDisplayState';
+export const PANEL_STATE_OPEN        = 'open';
+export const PANEL_STATE_USER_CLOSED = 'user-closed';
+
 // ── Mutable state object ───────────────────────────────────────────────────
 // All modules import this object and read/write via state.<key>.
 // Using a single object (instead of exported lets) ensures assignments from

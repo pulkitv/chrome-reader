@@ -247,6 +247,47 @@ export async function handleAddToReadingList() {
   }
 }
 
+// ── Auto-save (silent, fire-and-forget) ───────────────────────────────────────
+
+export async function autoSaveToReadingList() {
+  try {
+    const title    = document.getElementById('articleTitle').textContent;
+    const sourceEl = document.getElementById('sourceLink');
+    const url      = sourceEl ? sourceEl.href : window.location.href;
+    const siteName = document.getElementById('articleSite').textContent
+                     || new URL(url).hostname;
+
+    const allImages    = Array.from(document.getElementById('articleBody').querySelectorAll('img'));
+    const remoteImages = allImages.filter(img =>
+      img.src && (img.src.startsWith('http://') || img.src.startsWith('https://'))
+    );
+
+    const conversions = await Promise.allSettled(
+      remoteImages.map(img => fetchImageAsPng(img.src))
+    );
+
+    let htmlContent = document.getElementById('articleBody').innerHTML;
+    remoteImages.forEach((img, i) => {
+      const result = conversions[i];
+      if (result.status !== 'fulfilled' || !result.value) return;
+      const encodedSrc = img.src.replace(/&/g, '&amp;');
+      htmlContent = htmlContent.split(img.src).join(result.value);
+      htmlContent = htmlContent.split(encodedSrc).join(result.value);
+    });
+
+    const response = await chrome.runtime.sendMessage({
+      action:  'saveToReadingList',
+      article: { title, url, siteName, htmlContent }
+    });
+
+    if (!response.success && !response.duplicate) {
+      console.warn('[ReadEasy] Auto-save failed:', response.error);
+    }
+  } catch (err) {
+    console.warn('[ReadEasy] Auto-save error (non-fatal):', err.message);
+  }
+}
+
 // ── Notification toast ────────────────────────────────────────────────────────
 
 /**

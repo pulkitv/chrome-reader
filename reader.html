@@ -22,8 +22,9 @@
         <div class="reader-auth-wrap">
           <button id="readerAuthBtn" class="icon-btn auth-btn signed-out" title="Sign in with Google" aria-label="Sign in with Google" aria-haspopup="true" aria-expanded="false" type="button">
             <span id="readerAuthGuestIcon" class="auth-guest-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M20 21C20 17.6863 16.4183 15 12 15C7.58172 15 4 17.6863 4 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
               </svg>
             </span>
             <img id="readerAuthAvatar" class="auth-avatar" alt="Profile" hidden />
@@ -142,14 +143,14 @@
         </div>
         <div class="header-row header-row-secondary">
           <div class="audio-control">
-            <button id="ttsSendBtn" class="icon-btn text-btn icon-text-btn" title="Open in ReadEasy">
+            <button id="ttsSendBtn" class="icon-btn text-btn icon-text-btn" title="Open in WebApp">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 3h7v7"/>
                 <path d="M10 14L21 3"/>
                 <path d="M21 14v7h-7"/>
                 <path d="M3 10V3h7"/>
               </svg>
-              <span>Open in ReadEasy</span>
+              <span>Open in WebApp</span>
             </button>
             <select id="ttsVoiceSelect" class="mode-select" title="Voice">
               <option value="default">Default voice</option>
@@ -160,12 +161,12 @@
                 <path d="M16 8c1 .8 1.5 1.8 1.5 3s-.5 2.2-1.5 3"/>
               </svg>
             </button>
-            <button id="addToListBtn" class="icon-btn text-btn icon-text-btn" title="Add to Reading List">
+            <button id="addToListBtn" class="icon-btn text-btn icon-text-btn" title="Open Side Panel">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                 <path d="M12 7v6M9 10h6"/>
               </svg>
-              <span>Add to List</span>
+              <span>Open Side Panel</span>
             </button>
             <button id="editBtn" class="icon-btn text-btn icon-text-btn" title="Edit article">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

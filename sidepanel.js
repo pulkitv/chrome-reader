@@ -10,7 +10,13 @@
 
 // ── Module imports ─────────────────────────────────────────────────────────
 
-import { state, AUTH_STATE_KEY, FLOATING_BUTTON_ENABLED_KEY } from './sidepanel/state.js';
+import {
+  state,
+  AUTH_STATE_KEY,
+  FLOATING_BUTTON_ENABLED_KEY,
+  PANEL_DISPLAY_STATE_KEY,
+  PANEL_STATE_USER_CLOSED
+} from './sidepanel/state.js';
 
 import { showToast }                                   from './sidepanel/utils.js';
 
@@ -174,6 +180,13 @@ function setupEventListeners() {
     if (e.target && e.target.id === 'x4Modal') {
       closeX4Modal();
     }
+  });
+
+  // ── Panel close ──
+  document.getElementById('panelCloseBtn').addEventListener('click', async () => {
+    state.panelDisplayState = PANEL_STATE_USER_CLOSED;
+    await chrome.storage.sync.set({ [PANEL_DISPLAY_STATE_KEY]: PANEL_STATE_USER_CLOSED });
+    window.close();
   });
 
   // ── Global keyboard / outside-click dismissal ──

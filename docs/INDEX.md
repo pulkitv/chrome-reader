@@ -1,6 +1,6 @@
 # ReadEasy Documentation Index
 
-> Last updated: April 19, 2026
+> Last updated: May 25, 2026
 
 This folder is the single documentation hub for both humans and CLI agents.
 

@@ -900,3 +900,11 @@ button:disabled {
 .list-section::-webkit-scrollbar-thumb:hover {
   background: var(--muted-color);
 }
+
+/* ── Panel close button ──────────────────────────────────────────────────────── */
+.panel-close-btn {
+  color: var(--muted-color);
+}
+.panel-close-btn:hover:not(:disabled) {
+  color: #dc3545;
+}
