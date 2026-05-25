@@ -23,6 +23,9 @@ export const state = {
   currentFontSizeIndex: 1,   // index into FONT_SIZES; 1 = 'font-normal'
   isWideWidth:          false,
 
+  // ── Reading list ─────────────────────────────────────────────────────────
+  currentArticleId: null,  // IndexedDB id of the currently displayed article once saved
+
   // ── Edit mode ────────────────────────────────────────────────────────────
   isEditMode:     false,
   preEditContent: '',        // innerHTML snapshot of #articleBody before editing

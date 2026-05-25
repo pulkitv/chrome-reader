@@ -12,6 +12,8 @@ const AUTH_PROVIDER_GOOGLE = 'google';
 const MIN_ACCEPTED_CONTENT_CHARS = 180;
 const EXTRACTION_RETRY_DELAYS_MS = [0, 350, 900];
 
+const SUPABASE_URL = 'https://pcyjafpopnjtjqaelycy.supabase.co';
+
 let inMemoryAuthToken = null;
 
 // In-memory cache of panelDisplayState — lets action/context-menu handlers call
@@ -130,6 +132,91 @@ async function fetchGoogleProfile(token) {
     name: payload && payload.name ? String(payload.name) : '',
     picture: payload && payload.picture ? String(payload.picture) : ''
   };
+}
+
+// ── Supabase cloud sync helpers ───────────────────────────────────────────────
+
+async function getInMemoryAuthToken() {
+  if (inMemoryAuthToken) return inMemoryAuthToken;
+  const token = await getAuthToken({ interactive: false }).catch(() => null);
+  if (token) inMemoryAuthToken = token;
+  return token;
+}
+
+async function supabaseSyncArticle(localId, article) {
+  try {
+    const googleToken = await getInMemoryAuthToken();
+    if (!googleToken) return;
+
+    const contentHash = simpleHash(article.htmlContent || '');
+    const metaResp = await fetch(`${SUPABASE_URL}/functions/v1/sync-article`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        googleAccessToken: googleToken,
+        localId,
+        title:       article.title    || '',
+        url:         article.url      || '',
+        siteName:    article.siteName || '',
+        addedDate:   article.addedDate || Date.now(),
+        contentHash,
+      })
+    });
+    if (!metaResp.ok) {
+      const body = await metaResp.text();
+      throw new Error(`sync-article: ${metaResp.status} — ${body}`);
+    }
+    const result = await metaResp.json();
+
+    if (result.action === 'no_change') {
+      console.log('[ReadEasy] Content unchanged, timestamp updated:', localId);
+      return;
+    }
+
+    const uploadResp = await fetch(result.signedUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      body: article.htmlContent
+    });
+    if (!uploadResp.ok) {
+      const body = await uploadResp.text();
+      throw new Error(`Storage upload: ${uploadResp.status} — ${body}`);
+    }
+
+    console.log('[ReadEasy] Article synced to cloud (' + result.action + '):', localId);
+  } catch (err) {
+    console.warn('[ReadEasy] Cloud sync failed (non-fatal):', err.message);
+  }
+}
+
+async function supabaseTouchArticle(url) {
+  try {
+    const googleToken = await getInMemoryAuthToken();
+    if (!googleToken) return;
+    await fetch(`${SUPABASE_URL}/functions/v1/sync-article`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ googleAccessToken: googleToken, url, touchOnly: true })
+    });
+  } catch (err) {
+    console.warn('[ReadEasy] Cloud touch failed (non-fatal):', err.message);
+  }
+}
+
+async function supabaseDeleteArticle(localId) {
+  try {
+    const googleToken = await getInMemoryAuthToken();
+    if (!googleToken) return;
+
+    await fetch(`${SUPABASE_URL}/functions/v1/delete-article`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ googleAccessToken: googleToken, localId })
+    });
+    console.log('[ReadEasy] Article deleted from cloud:', localId);
+  } catch (err) {
+    console.warn('[ReadEasy] Cloud delete failed (non-fatal):', err.message);
+  }
 }
 
 async function signInWithGoogle() {
@@ -284,6 +371,35 @@ async function getArticleById(id) {
 
 function htmlToText(html) {
   return (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function simpleHash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
+    hash |= 0;
+  }
+  return (hash >>> 0).toString(16);
+}
+
+async function updateArticleContent(id, { title, htmlContent }) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORE_NAME], 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const article = getReq.result;
+      if (!article) { reject(new Error('Article not found')); return; }
+      article.title = title;
+      article.htmlContent = htmlContent;
+      const putReq = store.put(article);
+      putReq.onsuccess = () => resolve(article);
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
+    tx.oncomplete = () => db.close();
+  });
 }
 
 // ======================
@@ -445,7 +561,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const storedText = htmlToText(stored.htmlContent || '');
             const newText    = htmlToText(message.article.htmlContent || '');
             if (storedText === newText) {
-              sendResponse({ success: true, duplicate: true });
+              supabaseTouchArticle(message.article.url);
+              sendResponse({ success: true, duplicate: true, articleId: mostRecent.id });
               return;
             }
             // Content differs — fall through and save as a new entry
@@ -460,12 +577,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const oldest = await getOldestArticle();
           if (oldest) {
             await deleteArticle(oldest.id);
+            supabaseDeleteArticle(oldest.id);
             console.log('Deleted oldest article to make room:', oldest.title);
           }
         }
         
         // Add article to IndexedDB
         const articleId = await addArticle(message.article);
+        supabaseSyncArticle(articleId, { ...message.article, addedDate: Date.now() });
         console.log('Article saved to IndexedDB:', articleId);
         
         // Update metadata in chrome.storage.local
@@ -493,11 +612,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Sidepanel might not be open, ignore error
         });
         
+        sendResponse({ success: true, articleId });
+      }
+      else if (message.action === 'updateArticleContent') {
+        const { id, title, htmlContent } = message;
+        const updated = await updateArticleContent(id, { title, htmlContent });
+
+        // Update title in local metadata
+        const { readingListMeta = [] } = await chrome.storage.local.get('readingListMeta');
+        const metaEntry = readingListMeta.find(m => m.id === id);
+        if (metaEntry) {
+          metaEntry.title = title;
+          await chrome.storage.local.set({ readingListMeta });
+        }
+
+        chrome.runtime.sendMessage({ action: 'listUpdated' }).catch(() => {});
+
+        // Sync updated content to Supabase
+        supabaseSyncArticle(id, {
+          title,
+          htmlContent,
+          url:       updated.url       || '',
+          siteName:  updated.siteName  || '',
+          addedDate: updated.addedDate || Date.now()
+        });
+
         sendResponse({ success: true });
-      } 
+      }
       else if (message.action === 'deleteFromList') {
         // Delete from IndexedDB
         await deleteArticle(message.id);
+        supabaseDeleteArticle(message.id);
         
         // Update metadata in chrome.storage.local
         const { readingListMeta = [] } = await chrome.storage.local.get('readingListMeta');

@@ -84,6 +84,8 @@ import {
   emailArticleEPUB
 }                                   from './reader/epub.js';
 
+import { initUpload }               from './reader/upload.js';
+
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -113,6 +115,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function setupEventListeners() {
+
+  initUpload();
 
   // ── Window / nav ──
   document.getElementById('closeBtn').addEventListener('click', () => window.close());

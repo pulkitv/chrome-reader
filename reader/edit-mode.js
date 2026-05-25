@@ -18,8 +18,8 @@
 
 /* global chrome */
 
-import { state }            from './state.js';
-import { showNotification } from './article.js';
+import { state }                        from './state.js';
+import { showNotification, fetchImageAsPng } from './article.js';
 
 // ── Enter / exit edit mode ────────────────────────────────────────────────────
 
@@ -97,6 +97,12 @@ export function exitEditMode(save) {
         chrome.storage.session.set({ currentArticle });
       }
     });
+
+    // If the article is already in the reading list, update that entry too
+    if (state.currentArticleId != null) {
+      persistEditToReadingList(state.currentArticleId, titleEl, bodyEl).catch(() => {});
+    }
+
     showNotification('Article saved', 'success');
   } else {
     // Revert to the snapshots taken in enterEditMode
@@ -110,6 +116,35 @@ export function exitEditMode(save) {
   bodyEl.removeAttribute('contenteditable');
   document.body.classList.remove('edit-mode');
   closeLinkPopover();
+}
+
+// ── Edit persist ─────────────────────────────────────────────────────────────
+
+async function persistEditToReadingList(articleId, titleEl, bodyEl) {
+  const allImages    = Array.from(bodyEl.querySelectorAll('img'));
+  const remoteImages = allImages.filter(img =>
+    img.src && (img.src.startsWith('http://') || img.src.startsWith('https://'))
+  );
+
+  const conversions = await Promise.allSettled(
+    remoteImages.map(img => fetchImageAsPng(img.src))
+  );
+
+  let htmlContent = bodyEl.innerHTML;
+  remoteImages.forEach((img, i) => {
+    const result = conversions[i];
+    if (result.status !== 'fulfilled' || !result.value) return;
+    const encodedSrc = img.src.replace(/&/g, '&amp;');
+    htmlContent = htmlContent.split(img.src).join(result.value);
+    htmlContent = htmlContent.split(encodedSrc).join(result.value);
+  });
+
+  await chrome.runtime.sendMessage({
+    action:      'updateArticleContent',
+    id:          articleId,
+    title:       titleEl.textContent.trim(),
+    htmlContent,
+  });
 }
 
 // ── Formatting commands ───────────────────────────────────────────────────────

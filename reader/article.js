@@ -13,6 +13,8 @@
 
 /* global chrome */
 
+import { state } from './state.js';
+
 // ── Article rendering ─────────────────────────────────────────────────────────
 
 /**
@@ -235,6 +237,7 @@ export async function handleAddToReadingList() {
     });
 
     if (!response.success) throw new Error(response.error || 'Failed to save article');
+    if (response.articleId != null) state.currentArticleId = response.articleId;
 
     showNotification('Added to Reading List ✓', 'success');
   } catch (error) {
@@ -283,6 +286,7 @@ export async function autoSaveToReadingList() {
     if (!response.success && !response.duplicate) {
       console.warn('[ReadEasy] Auto-save failed:', response.error);
     }
+    if (response.articleId != null) state.currentArticleId = response.articleId;
   } catch (err) {
     console.warn('[ReadEasy] Auto-save error (non-fatal):', err.message);
   }
