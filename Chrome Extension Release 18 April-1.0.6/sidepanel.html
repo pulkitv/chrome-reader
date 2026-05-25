@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reading List</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body class="light-theme">
+  <!-- Header with storage info -->
+  <header class="panel-header">
+    <div class="panel-header-top">
+      <h1>Reading List</h1>
+      <div class="header-actions">
+        <div class="header-control">
+          <button id="authBtn" class="icon-btn auth-btn signed-out" aria-label="Sign in with Google" aria-haspopup="true" aria-expanded="false" type="button" title="Sign in with Google">
+            <span id="authGuestIcon" class="auth-guest-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                <path d="M20 21C20 17.6863 16.4183 15 12 15C7.58172 15 4 17.6863 4 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
+              </svg>
+            </span>
+            <img id="authAvatar" class="auth-avatar" alt="Signed-in avatar" hidden />
+          </button>
+          <div id="authMenuDropdown" class="header-menu-dropdown auth-menu-dropdown" hidden>
+            <div class="auth-menu-profile">
+              <img id="authMenuAvatar" class="auth-menu-avatar" alt="Profile avatar" hidden />
+              <div class="auth-menu-text">
+                <div id="authMenuName" class="auth-menu-name">Guest</div>
+                <div id="authMenuEmail" class="auth-menu-email">Not signed in</div>
+              </div>
+            </div>
+            <button id="authSignOutBtn" class="header-menu-item" type="button" hidden>Sign out</button>
+          </div>
+        </div>
+
+        <div class="header-control">
+          <button id="headerMenuBtn" class="icon-btn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false" type="button">
+            <span aria-hidden="true">⋯</span>
+          </button>
+          <div id="headerMenuDropdown" class="header-menu-dropdown" hidden>
+            <button id="openSettingsBtn" class="header-menu-item" type="button">Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="storageInfo" class="storage-info">0/10 articles • 0MB</div>
+  </header>
+
+  <div id="mainPage">
+    <!-- Save Selection — always visible when on a regular webpage -->
+    <div id="saveSelectionSection" class="save-selection-section" style="display:none;">
+      <button id="saveSelectionBtn" class="btn-selection">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2 2h12v12H2z" stroke="currentColor" stroke-width="1.5" fill="none" rx="2"/>
+          <path d="M5 5h6M5 8h6M5 11h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Save Selection</span>
+      </button>
+    </div>
+
+    <!-- Current article section (shown when on reader page) -->
+    <div id="currentArticleSection" class="current-article-section" style="display: block;">
+      <div class="section-label">Current Article</div>
+      <div class="article-card current">
+        <button id="addToListBtn" class="btn-add-mini" aria-label="Add to List" title="Add to List">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span class="sr-only">Add to List</span>
+        </button>
+        <div class="article-title" id="currentTitle">No article detected yet</div>
+        <div class="article-meta" id="currentDomain">Open an article page to extract</div>
+      </div>
+    </div>
+
+    <!-- Saved articles list -->
+    <div class="list-section">
+      <div class="section-label">Saved Articles</div>
+      <div id="articleList" class="article-list">
+        <!-- Articles will be rendered here -->
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 8H36V40H12V8Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M18 16H30M18 24H30M18 32H24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <p>No articles saved yet</p>
+          <small>Click "Add to List" from any reader view to save articles</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer with merge actions -->
+    <footer class="panel-footer">
+      <div class="footer-actions">
+        <button id="mergeEpubBtn" class="btn-secondary" disabled>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 12V4M8 4L5 7M8 4L11 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 14H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span>Merge & Download EPUB</span>
+        </button>
+
+        <button id="mergeSendX4Btn" class="btn-x4" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Merge & Send to X4</span>
+        </button>
+      </div>
+      <a
+        class="feedback-link"
+        href="https://readeasy.featurebase.app/"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Share feedback and ideas"
+      >
+        Share feedback & ideas
+      </a>
+    </footer>
+  </div>
+
+  <div id="settingsPage" class="settings-page" style="display:none;">
+    <div class="settings-header-row">
+      <button id="settingsBackBtn" class="btn-outline" type="button" aria-label="Back to main page">← Back</button>
+      <div class="settings-title">Settings</div>
+    </div>
+
+    <div class="settings-card">
+      <div class="settings-row">
+        <label for="floaterEnabledSelect" class="settings-label">ReadEasy Floater</label>
+        <select id="floaterEnabledSelect" class="settings-select">
+          <option value="enabled">enabled</option>
+          <option value="disabled">disabled</option>
+        </select>
+      </div>
+      <small class="settings-help">enabled = floater shown, disabled = floater hidden</small>
+    </div>
+  </div>
+
+  <!-- Merge & Send to X4 modal -->
+  <div id="x4Modal" class="x4-modal" aria-hidden="true">
+    <div class="x4-modal-content" role="dialog" aria-modal="true" aria-labelledby="x4ModalTitle">
+      <div class="x4-modal-header">
+        <h2 id="x4ModalTitle">Send to X4</h2>
+        <button id="x4ModalCloseBtn" class="x4-close-btn" aria-label="Close">×</button>
+      </div>
+
+      <div class="x4-modal-body">
+        <label class="x4-label" for="x4EpubName">EPUB Name</label>
+        <input id="x4EpubName" class="x4-input" type="text" maxlength="180" />
+
+        <div class="x4-file-size-row">
+          <span class="x4-size-label">File Size</span>
+          <span id="x4EpubSize" class="x4-size-value">-</span>
+        </div>
+
+        <label class="x4-checkbox-row" for="x4ExcludeImages">
+          <input id="x4ExcludeImages" type="checkbox" />
+          <span>Exclude Images</span>
+        </label>
+
+        <div class="x4-action-row">
+          <button id="x4SendBtn" class="btn-x4">Send to X4</button>
+          <button id="x4DownloadBtn" class="btn-secondary">Download EPUB</button>
+        </div>
+
+        <div class="x4-settings-section">
+          <label class="x4-label" for="x4FirmwareSelect">Firmware Type</label>
+          <select id="x4FirmwareSelect" class="x4-select">
+            <option value="crosspoint">CrossPoint firmware</option>
+            <option value="stock">Stock firmware official</option>
+          </select>
+
+          <label class="x4-label" for="x4DeviceIp">Device IP Address</label>
+          <div class="x4-ip-row">
+            <input id="x4DeviceIp" class="x4-input" type="text" value="192.168.1.11" />
+            <button id="x4CheckConnectionBtn" class="btn-outline">Refresh</button>
+          </div>
+
+          <div id="x4ConnectionStatus" class="x4-connection-status">Connection not checked.</div>
+          <div id="x4ResponsePreview" class="x4-response-preview" hidden></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container for notifications -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="db.js"></script>
+  <script src="libs/jszip.min.js"></script>
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "referer",
+          "operation": "set",
+          "value": "https://www.google.com/"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*substackcdn.com*",
+      "resourceTypes": ["image"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "referer",
+          "operation": "set",
+          "value": "https://www.google.com/"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*miro.medium.com*",
+      "resourceTypes": ["image"]
+    }
+  }
+]

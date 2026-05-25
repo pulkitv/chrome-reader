@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer-when-downgrade">
+  <title>ReadEasy</title>
+  <link rel="stylesheet" href="reader.css">
+</head>
+<body class="light-theme">
+  <!-- Header with controls -->
+  <header class="reader-header">
+    <div class="header-content">
+      <div class="header-left">
+        <button id="closeBtn" class="icon-btn" title="Close ReadEasy">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="header-right">
+        <div class="header-row header-row-primary">
+          <!-- Theme switcher -->
+          <div class="theme-switcher">
+            <button class="theme-btn" data-theme="light" title="Light theme">A</button>
+            <button class="theme-btn" data-theme="sepia" title="Sepia theme">A</button>
+            <button class="theme-btn" data-theme="dark" title="Dark theme">A</button>
+          </div>
+          
+          <!-- Font size controls -->
+          <div class="font-controls">
+            <button id="decreaseFont" class="icon-btn" title="Decrease font size">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <text x="50%" y="50%" font-size="16" text-anchor="middle" dominant-baseline="middle" fill="currentColor">A</text>
+              </svg>
+            </button>
+            <button id="increaseFont" class="icon-btn" title="Increase font size">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <text x="50%" y="50%" font-size="20" text-anchor="middle" dominant-baseline="middle" fill="currentColor">A</text>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Width control -->
+          <div class="width-control">
+            <button id="toggleWidth" class="icon-btn" title="Toggle width">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="16" rx="2"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Flash It speed reading control -->
+          <div class="flash-control">
+            <select id="flashSpeed" class="speed-select" title="Reading speed">
+              <option value="50">50 WPM</option>
+              <option value="100">100 WPM</option>
+              <option value="150">150 WPM</option>
+              <option value="200">200 WPM</option>
+              <option value="250" selected>250 WPM</option>
+              <option value="300">300 WPM</option>
+              <option value="350">350 WPM</option>
+              <option value="400">400 WPM</option>
+              <option value="450">450 WPM</option>
+              <option value="500">500 WPM</option>
+              <option value="600">600 WPM</option>
+              <option value="700">700 WPM</option>
+              <option value="800">800 WPM</option>
+              <option value="900">900 WPM</option>
+              <option value="1000">1000 WPM</option>
+            </select>
+            <select id="flashModeSelect" class="mode-select" title="Display mode">
+              <option value="overlay">RSVP Overlay</option>
+              <option value="inline-word">Word Highlight</option>
+              <option value="inline-line">Line Highlight</option>
+            </select>
+            <button id="flashBtn" class="icon-btn" title="Start speed reading">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+            </button>
+            <button id="flashRestart" class="icon-btn flash-control-btn" title="Restart" style="display: none;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Download button -->
+          <div class="download-control">
+            <button id="downloadBtn" class="icon-btn" title="Download as HTML">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </button>
+            <button id="mergeEpubBtn" class="icon-btn text-btn icon-text-btn" title="Merge EPUBs">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="8" height="8" rx="1"/>
+                <rect x="13" y="3" width="8" height="8" rx="1"/>
+                <rect x="3" y="13" width="8" height="8" rx="1"/>
+                <rect x="13" y="13" width="8" height="8" rx="1"/>
+                <path d="M7 7l10 10M17 7l-10 10"/>
+              </svg>
+              <span>Merge EPUBs</span>
+            </button>
+            <button id="emailEpubBtn" class="icon-btn" title="Email EPUB">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+              </svg>
+            </button>
+            <a id="feedbackBtn" href="https://readeasy.featurebase.app/" target="_blank" rel="noopener noreferrer" class="icon-btn text-btn icon-text-btn" title="Share feedback and ideas">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>
+                <path d="M8 10h8M8 14h5"/>
+              </svg>
+              <span>Feedback</span>
+            </a>
+            <a id="donateBtn" href="https://buymeacoffee.com/pulkitv" target="_blank" class="icon-btn text-btn icon-text-btn" title="Support ReadEasy">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 21h20M17.5 4h-11a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm-6 2v6m3-6v6"/>
+              </svg>
+              <span>Donate</span>
+            </a>
+          </div>
+        </div>
+        <div class="header-row header-row-secondary">
+          <div class="audio-control">
+            <button id="ttsSendBtn" class="icon-btn text-btn icon-text-btn" title="Beta View">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 3h7v7"/>
+                <path d="M10 14L21 3"/>
+                <path d="M21 14v7h-7"/>
+                <path d="M3 10V3h7"/>
+              </svg>
+              <span>Beta View</span>
+            </button>
+            <select id="ttsVoiceSelect" class="mode-select" title="Voice">
+              <option value="default">Default voice</option>
+            </select>
+            <button id="ttsToggleBtn" class="icon-btn" title="Listen">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 9v6h4l5 4V5l-5 4H5z"/>
+                <path d="M16 8c1 .8 1.5 1.8 1.5 3s-.5 2.2-1.5 3"/>
+              </svg>
+            </button>
+            <button id="addToListBtn" class="icon-btn text-btn icon-text-btn" title="Add to Reading List">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                <path d="M12 7v6M9 10h6"/>
+              </svg>
+              <span>Add to List</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main article content -->
+  <main class="reader-main">
+    <article id="articleContent" class="article-content">
+      <!-- Metadata -->
+      <div class="article-meta">
+        <h1 id="articleTitle" class="article-title">Loading...</h1>
+        <div id="articleByline" class="article-byline"></div>
+        <div id="articleSite" class="article-site"></div>
+      </div>
+      
+      <!-- Article body -->
+      <div id="articleBody" class="article-body">
+        <p>Loading article content...</p>
+      </div>
+    </article>
+  </main>
+
+  <!-- Reading progress indicator -->
+  <div id="progressBar" class="progress-bar"></div>
+
+  <!-- Download Modal -->
+  <div id="downloadModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Download Article</h2>
+        <button id="closeModal" class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Save this article as an HTML file:</p>
+        <input type="text" id="filenameInput" placeholder="Enter filename (without extension)" class="filename-input" />
+        <p class="modal-note">The article will be saved as a self-contained HTML file that you can open in any browser or email as an attachment.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelDownload" class="btn btn-secondary">Cancel</button>
+        <button id="confirmDownload" class="btn btn-primary">Download</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Email EPUB Modal -->
+  <div id="emailEpubModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Email EPUB File</h2>
+        <button id="closeEmailEpubModal" class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Enter the recipient's email address:</p>
+        <input type="email" id="recipientEmailInput" placeholder="recipient@example.com" class="email-input" />
+        <p class="modal-note">The EPUB file will be downloaded, and your email client will open with the recipient filled in. You'll need to manually attach the downloaded EPUB file before sending.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelEmailEpub" class="btn btn-secondary">Cancel</button>
+        <button id="confirmEmailEpub" class="btn btn-primary">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flash It RSVP Overlay -->
+  <div id="flashOverlay" class="flash-overlay">
+    <div class="flash-overlay-content">
+      <div class="flash-overlay-header">
+        <div class="flash-progress">Word <span id="flashCurrentWord">0</span> of <span id="flashTotalWords">0</span></div>
+        <button id="closeFlashOverlay" class="close-flash">&times;</button>
+      </div>
+      <div class="flash-word-container">
+        <div class="flash-context-prev" id="flashPrevWord"></div>
+        <div class="flash-current-word" id="flashCurrentWordDisplay"></div>
+        <div class="flash-context-next" id="flashNextWord"></div>
+      </div>
+      <div class="flash-overlay-footer">
+        <button id="flashOverlayToggle" class="flash-overlay-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="6" y="4" width="4" height="16"/>
+            <rect x="14" y="4" width="4" height="16"/>
+          </svg>
+        </button>
+        <button id="flashOverlayRestart" class="flash-overlay-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="libs/jszip.min.js"></script>
+  <script src="reader.js"></script>
+</body>
+</html>

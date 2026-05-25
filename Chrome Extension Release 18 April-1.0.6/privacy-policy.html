@@ -14,16 +14,16 @@
 <body>
   <h1>ReadEasy Privacy Policy</h1>
 
-  <p><strong>Last updated:</strong> May 25, 2026</p>
+  <p><strong>Last updated:</strong> April 17, 2026</p>
 
-  <p>ReadEasy ("the extension") provides a distraction-free reader view by extracting article content from the current page. When an article opens in reader view, it is silently and automatically saved to the Reading List on your device (no button click required). The reader also supports saving user-selected highlighted text via the <strong>"Save Selection"</strong> button in the side panel, editing article content directly inside the reader view (session-only), merging saved articles into a single PDF via the browser print dialog, using a floating webpage launcher that offers quick actions (Switch to reading view / Open side panel), a right-click context menu option to open any page in Reader View, managing extension display preferences from the side panel (including a panel close button that records your choice not to auto-open the panel), optional Google sign-in, and feedback collection links in the reader/side panel that open our Featurebase portal. This privacy policy explains how data is handled.</p>
+  <p>ReadEasy ("the extension") provides a distraction-free reader view by extracting article content from the current page. It also supports saving user-selected highlighted text from webpages into the Reading List, using a floating webpage launcher that offers quick actions (Switch to reading view / Open side panel), managing extension display preferences from the side panel, optional Google sign-in, and feedback collection links in the reader/side panel that open our Featurebase portal. This privacy policy explains how data is handled.</p>
 
 
   <h2>Data We Collect</h2>
   <p>ReadEasy complies with applicable privacy laws including GDPR. As the extension does not collect personal data on external servers, GDPR data subject rights (access, deletion, portability) are managed entirely through your browser's built-in controls.</p>
-  <p>We do not collect, transmit, or sell any personal data to external servers. The extension processes the current page's <strong>website content</strong> (text, images, links) entirely on your device to render the reader view, manage your Reading List, and generate exports (HTML / EPUB / PDF). In-reader edits you make are held only in session storage for the duration of the tab and are never sent anywhere. Text-to-speech playback uses your browser's built-in speech engine, which runs locally on your device.</p>
+  <p>We do not collect, transmit, or sell any personal data to external servers. The extension processes the current page's <strong>website content</strong> (text, images, links) entirely on your device to render the reader view, manage your Reading List, and generate exports (HTML / EPUB). Text-to-speech playback uses your browser's built-in speech engine, which runs locally on your device.</p>
 
-  <p>When an article opens in <strong>Reader View</strong>, it is automatically saved to your Reading List on your device. This auto-save is performed entirely locally: article text and images (converted to base64 PNG data URIs) are stored in your browser's IndexedDB. A content-based deduplication check runs first — if the same URL with identical content is already saved, the save is silently skipped. When you explicitly use <strong>"Save Selection"</strong> in the side panel, the selected text is similarly stored locally. No article or selection data is sent to any server during these processes — images are fetched directly from the originating website and stored in your browser only.</p>
+  <p>When you use the <strong>Reading List</strong>, <strong>"Add to List"</strong>, or <strong>"Save Selection"</strong> features, article/selection content (including images converted to base64 PNG data URIs when available) is stored locally in your browser's IndexedDB. No data is sent to any server during this process — images are fetched directly from the originating website and stored in your browser only.</p>
 
   <p>ReadEasy may also display a small floating launcher on regular webpages so you can quickly open a two-option menu (Switch to reading view / Open side panel). The launcher itself does not transmit page data anywhere. Its visibility setting and last dragged position are stored only in Chrome sync storage so the extension can restore your preference across pages and signed-in Chrome profiles. When you change the launcher enabled/disabled setting, the extension propagates that preference to open tabs so the launcher can hide/show immediately.</p>
 
@@ -37,13 +37,13 @@
   <h2>Data We Store Locally</h2>
   <p>All data is stored only in your browser, never on external servers:</p>
   <ul>
-    <li><strong>chrome.storage.sync</strong> — Theme, font size, content width, Send-to-X4 defaults, floating launcher enabled/disabled preference, floating launcher position, side panel display state (open / user-closed), and minimal sign-in state (isSignedIn, provider, profile {email/name/picture}, lastSignInAt) synced across your Chrome profiles</li>
+    <li><strong>chrome.storage.sync</strong> — Theme, font size, content width, Send-to-X4 defaults, floating launcher enabled/disabled preference, floating launcher position, and minimal sign-in state (isSignedIn, provider, profile {email/name/picture}, lastSignInAt) synced across your Chrome profiles</li>
     <li><strong>chrome.storage.local</strong> — Reading List metadata: article titles, URLs, site names, and save dates</li>
     <li><strong>IndexedDB (ReadEasyDB)</strong> — Full article HTML with embedded images for the Reading List and EPUB merge features. Each article may be 5–30 MB depending on image count. Limited to 10 articles.</li>
-    <li><strong>chrome.storage.session</strong> — Current article data and any in-reader edits held temporarily while the reader tab is open; cleared when the browser session ends</li>
+    <li><strong>chrome.storage.session</strong> — Current article data held temporarily while the reader tab is open; cleared when the browser session ends</li>
   </ul>
 
-  <p>Article content is saved automatically when you open Reader View, and text selections are only additionally processed when you explicitly click <strong>"Save Selection"</strong> in the side panel. The extension does not continuously record what you select or type on webpages.</p>
+  <p>Text selections are only processed when you explicitly click <strong>"Save Selection"</strong> in the side panel. The extension does not continuously record what you select or type on webpages.</p>
 
   <p>For Google sign-in, the extension uses Chrome's identity APIs. Access tokens are used only in-memory by the extension service worker during auth/profile retrieval and are not persisted in extension storage.</p>
 
@@ -57,7 +57,6 @@
   <ul>
     <li><strong>"Beta View"</strong> — article HTML and CSS are sent via <code>postMessage</code> to the web app you open. You can disable this feature by not using the Beta View button.</li>
     <li><strong>Download EPUB / HTML</strong> — files are saved to your device's downloads folder</li>
-    <li><strong>"Merge &amp; Create PDF"</strong> — generates a merged HTML document entirely on your device, opens it as a local blob URL in a new tab, and triggers Chrome's print dialog so you can save it as PDF. No data is sent to any server.</li>
     <li><strong>Email EPUB</strong> — opens your default email client via a <code>mailto:</code> link; the EPUB is attached client-side</li>
     <li><strong>"Merge EPUBs"</strong> — opens <code>https://merge-epubs.vercel.app/</code> in a new tab. Any content you submit there is provided directly by you on that website.</li>
     <li><strong>"Merge & Send to X4"</strong> — EPUB files are sent via HTTP POST to a user-specified local IP address (e.g., 192.168.1.11) on your local network for device integration. No data is transmitted to external servers.</li>
@@ -74,11 +73,11 @@
   <ul>
     <li><code>activeTab</code> — Access the current page when the user explicitly clicks the extension icon to open Reader View</li>
     <li><code>scripting</code> — Inject the Readability content extraction script into the active tab when triggered by the user</li>
-    <li><code>storage</code> — Save preferences, Reading List metadata, temporary article data, and session-only in-reader edits to your browser</li>
+    <li><code>storage</code> — Save preferences, Reading List metadata, and temporary article data to your browser</li>
     <li><code>identity</code> — Enables extension-native Google sign-in via <code>chrome.identity.getAuthToken()</code> when you explicitly click the sign-in icon</li>
-    <li><code>sidePanel</code> — Display the Reading List side panel where users can view, manage, and access saved articles, merge/download EPUBs, create merged PDFs, and send to X4</li>
+    <li><code>sidePanel</code> — Display the Reading List side panel where users can view, manage, and access saved articles</li>
     <li><code>declarativeNetRequest</code> — Set <code>Referer</code> headers on image requests to certain CDNs (e.g. Substack, Medium) so article images load correctly. No content is inspected or modified.</li>
-    <li><code>contextMenus</code> — Add a "ReadEasy Reader View" right-click context menu option that opens the current page in Reader View using the same extraction pipeline as the toolbar button</li>
+    <li><code>contextMenus</code> — Add a right-click context menu option for quick access to the Reading List side panel</li>
     <li><code>host_permissions: &lt;all_urls&gt;</code> — Required so the extension can fetch images from any CDN domain to embed them locally for Reading List / highlighted selections and export features. Without this, cross-origin image fetches would be blocked.</li>
     <li><code>content_scripts on &lt;all_urls&gt;</code> — Enables the sidepanel-based <strong>"Save Selection"</strong> feature and the floating webpage launcher. When you highlight text on a webpage and click <strong>"Save Selection"</strong>, the content script extracts the selected text locally and returns it to the extension. The floating launcher only opens extension UI actions (reader view or side panel) and stores its own enabled/position preferences locally; it does not automatically send page content anywhere.</li>
   </ul>

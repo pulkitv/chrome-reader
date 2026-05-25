@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ReadEasy - Read, Save, Edit Web Articles",
-  "version": "2.0.1",
-  "description": "Read, Save, Edit, Highlight, Merge web articles (incl chatGPT, claude conversations) or any content in a distraction-free format",
+  "name": "ReadEasy",
+  "version": "1.0.6",
+  "description": "Clean reading experience - extract and display article content in a distraction-free format",
   "permissions": [
     "activeTab",
     "scripting",
