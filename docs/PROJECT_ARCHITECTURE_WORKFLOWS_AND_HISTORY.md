@@ -11,7 +11,8 @@
 | Function | Purpose |
 |----------|---------|
 | `enterEditMode()` | Makes title/byline/body contenteditable; strips blocking inline styles; places cursor via RAF |
-| `exitEditMode(save)` | Save: persists to session storage; Cancel: reverts snapshots; always closes link popover |
+| `exitEditMode(save)` | Save: persists to session storage; if `state.currentArticleId` set, also calls `persistEditToReadingList`; Cancel: reverts snapshots; always closes link popover |
+| `persistEditToReadingList(articleId, titleEl, bodyEl)` | Re-fetches remote images as PNG (allSettled); sends `updateArticleContent` to background to update IndexedDB + Supabase |
 | `execFormatCmd(cmd, value)` | Thin wrapper around `document.execCommand` for the active contenteditable element |
 | `applyFontSize(px)` | `fontSize('7')` marker trick → converts `<font size="7">` to inline `style.fontSize` |
 | `insertNoteBlock()` | Inserts HR + `.note-block` + HR + empty paragraph at cursor |
@@ -27,7 +28,8 @@
 
 | Function / Export | File | Purpose |
 |----------|------|---------|
-| `state` object | `reader/state.js` | Shared mutable state (auth, flash, edit, TTS, preferences) |
+| `state` object | `reader/state.js` | Shared mutable state (auth, flash, edit, TTS, preferences, `currentArticleId`) |
+| `state.currentArticleId` | `reader/state.js` | IndexedDB id of the current article once saved; `null` until `saveToReadingList` response sets it; gates edit-mode reading-list persistence |
 | `loadPreferences()` | `reader/preferences.js` | Reads sync storage and applies theme/font/width |
 | `savePreferences()` | `reader/preferences.js` | Persists current theme/font/width to sync storage |
 | `setTheme(theme)` | `reader/preferences.js` | Changes body class and saves preference |
@@ -43,9 +45,28 @@
 | `setupLazyLoading()` | IntersectionObserver-based lazy loader for `data-src` images |
 | `displayError(message)` | Renders an error state inside `#articleBody` |
 | `fetchImageAsPng(url)` | Fetches remote image → blob → canvas → PNG data URL (20 s timeout) |
-| `handleAddToReadingList()` | Converts images to base64, sends `saveToReadingList` message, shows toast |
-| `autoSaveToReadingList()` | Silent fire-and-forget save on reader view load; never blocks or toasts |
+| `handleAddToReadingList()` | Converts images to base64, sends `saveToReadingList` message, captures `response.articleId` into `state.currentArticleId`, shows toast |
+| `autoSaveToReadingList()` | Silent fire-and-forget save on reader view load; captures `response.articleId` into `state.currentArticleId`; never blocks or toasts |
 | `showNotification(msg, type)` | Transient toast notification (info/success/error) |
+
+### Reader Upload Module (`reader/upload.js`)
+
+| Function | Purpose |
+|----------|---------|
+| `initUpload()` | Wires `#uploadFileBtn` (click → `input.click()`) and `#uploadFileInput` (change → parse); called from `setupEventListeners()` in `reader.js` |
+| `parseHtmlFile(file)` | DOMParser; strips scripts/styles; extracts title; returns article object with `local-upload:///` URL |
+| `parseEpub(file)` | JSZip; reads `META-INF/container.xml` → OPF path; parses manifest + spine; pre-caches all images as base64 data URIs; concatenates chapters with `<hr>` separators |
+| `resolveZipPath(baseDir, relativePath)` | Resolves `../` relative paths within the ZIP (e.g. `OEBPS/Text/../Images/cover.jpg` → `OEBPS/Images/cover.jpg`) |
+
+### Background Cloud Sync (`background.js`)
+
+| Function | Purpose |
+|----------|---------|
+| `supabaseSyncArticle(localId, article)` | Sends article metadata + djb2 hash to `sync-article` edge fn; on `no_change` returns early; otherwise PUTs HTML to signed Supabase Storage URL |
+| `supabaseDeleteArticle(localId)` | Calls `delete-article` edge fn to remove DB row + storage file |
+| `supabaseTouchArticle(url)` | Calls `sync-article` with `touchOnly: true` to bump `synced_at` on duplicate detection |
+| `updateArticleContent(id, { title, htmlContent })` | IndexedDB readwrite: fetches existing article, updates title + htmlContent, puts back |
+| `simpleHash(str)` | djb2 hash (not crypto-secure); used as content-change signal to skip redundant Supabase uploads |
 
 ### PDF Merge (`sidepanel/pdf-build.js`)
 
@@ -155,6 +176,13 @@ Then reload the extension — Chrome rebuilds `_metadata/`.
 | Right-click context menu | `background.js` | `chrome.contextMenus.create()`, `onClicked` |
 | X4 modal workflow | `sidepanel/x4-modal.js` | `openX4Modal()`, `regenerateX4BlobForModal()` |
 | Floater ping guard | `background.js` + `selection.js` | `{ action: 'ping' }` / `{ alive: true }` |
+| EPUB/HTML file upload | `reader/upload.js` | `initUpload()`, `parseEpub()`, `parseHtmlFile()` |
+| Cloud sync (save/edit) | `background.js` | `supabaseSyncArticle()` |
+| Cloud sync (delete) | `background.js` | `supabaseDeleteArticle()` |
+| Cloud sync (touch) | `background.js` | `supabaseTouchArticle()` |
+| Edit → IndexedDB persist | `background.js` + `reader/edit-mode.js` | `updateArticleContent` message / `persistEditToReadingList()` |
+| Reader article ID tracking | `reader/state.js` | `state.currentArticleId` |
+| Supabase edge functions | `supabase/functions/` | `sync-article/index.ts`, `delete-article/index.ts` |
 
 ---
 
@@ -179,14 +207,15 @@ Then reload the extension — Chrome rebuilds `_metadata/`.
 ## Future Enhancement Ideas
 
 - [ ] Reader mode auto-detection (suggest reader view when landing on an article)
-- [ ] Persistent annotations / highlighting (currently session-only via edit mode)
-- [ ] Cloud sync for reading list content (auth exists; list sync not implemented)
+- [ ] Persistent annotations / highlighting (edit mode now persists to reading-list entries; articles viewed without saving are still session-only)
+- [x] Cloud sync for reading list content — Supabase edge functions sync article HTML on every save/edit/delete (May 25, 2026)
+- [x] Edit mode save to IndexedDB so edits survive tab refresh — `updateArticleContent` message persists to reading-list entries (May 25, 2026)
 - [ ] ChatGPT-specific visual differentiation (`.chat-turn--user` vs `--assistant` background tint)
 - [ ] "ReadEasy Reader View" context menu on `link` context to open the linked URL's reader view
-- [ ] Edit mode save to IndexedDB so edits survive tab refresh
+- [ ] Cloud reading list pull — web app or extension can fetch articles back from Supabase Storage on new device
 - [ ] Unit tests for critical functions (image pipeline, EPUB generation)
 - [ ] Flash It optimization for very large articles (>50 k words)
 
 ---
 
-**End of Document** — Last updated: May 25, 2026
+**End of Document** — Last updated: May 25, 2026 (webapp sync — Supabase cloud sync, file upload, edit-mode reading-list persistence)

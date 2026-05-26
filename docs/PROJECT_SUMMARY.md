@@ -26,7 +26,7 @@
 14. **Social dialog extraction** — domain-gated `pickActiveDialog()` for Facebook, Instagram, Reddit, Twitter/X, LinkedIn post overlays before full-document extraction
 15. **CDN referrer rules** — `rules.json` rules for `fbcdn.net` (referer: `facebook.com`) and `cdninstagram.com` (referer: `instagram.com`)
 16. **Facebook post permalink extraction** (Priority 0b) — `extractFacebookPermalink()` + `pruneFacebookNode()` + `removeScrambledDates()` + `cleanFacebookTitle()`; not-logged-in finds `[data-pagelet*="Permalink"]`; logged-in returns null → Priority 1 dialog handles post modal; `[role="main"]` intentionally excluded
-17. **Reader edit mode** — `#editBtn` (pastel yellow) → `#editToolbar` (B/I/U, color, size, alignment, bullet, numbered list, HR, note, image, link, Save, Cancel); title/byline/body all `contenteditable`; session-only save; note blocks with `hr.note-sep` separators; EPUB converts `.note-block` → `<blockquote>` with gradient for Apple Books
+17. **Reader edit mode** — `#editBtn` (pastel yellow) → `#editToolbar` (B/I/U, color, size, alignment, bullet, numbered list, HR, note, image, link, Save, Cancel); title/byline/body all `contenteditable`; Save always updates session storage; if article is in the reading list (`state.currentArticleId` set), also persists to IndexedDB via `updateArticleContent`; note blocks with `hr.note-sep` separators; EPUB converts `.note-block` → `<blockquote>` with gradient for Apple Books
 18. **Sidepanel Merge & Create PDF** — `sidepanel/pdf-build.js`; red `#mergePdfBtn` in footer; blob HTML in new tab with auto `window.print()`; user completes save via Chrome print dialog
 19. **Reader is ES-modularized** — `reader.js` ~160-line entry-point; 8 modules: `reader/state.js`, `reader/article.js`, `reader/preferences.js`, `reader/auth.js`, `reader/edit-mode.js`, `reader/tts.js`, `reader/flash-it.js`, `reader/epub.js`; `reader.html` loads with `type="module"`
 20. **ChatGPT conversation extractor** (Priority 0a) — `extractChatGPT()` collects `[data-message-author-role]` turns; strips UI chrome; resets absolute positioning; normalises images/code blocks; wraps turns as `<section class="chat-turn chat-turn--user/assistant">`
@@ -34,6 +34,9 @@
 22. **Floater ping guard** — re-enable pings each tab (`{ action: 'ping' }`) before injecting `selection.js`; `{ alive: true }` response → skip injection; prevents duplicate launcher instances
 23. **"Hide launcher" in floater menu** — floater click menu has divider + "Hide launcher"; sets `floatingButtonEnabled = false` same as Settings toggle
 24. **Reader auth button first-load fix** — `#readerAuthBtn { position: relative }`; `.auth-guest-icon` and `.auth-avatar` use `position: absolute; inset: 0`; `onerror` handler falls back to guest state on expired Google profile picture URL
+25. **Supabase cloud sync** — `background.js` fire-and-forgets to `supabase.co` edge functions on every article save, delete, and content edit; Google access token verified server-side; djb2 `contentHash` deduplicates uploads; non-fatal — Supabase failures never block the local save flow
+26. **EPUB/HTML file upload to reader** — `#uploadFileBtn` in reader header opens file picker; `reader/upload.js` parses EPUB (spine + chapters + embedded images) or raw HTML; result opens in a new reader tab via `chrome.storage.session.currentArticle`
+27. **Edit mode persists to reading list** — `exitEditMode(save)` now calls `persistEditToReadingList()` if `state.currentArticleId` is set; re-fetches remote images as PNG, then sends `updateArticleContent` to background which updates IndexedDB + metadata + syncs to Supabase
 
 ---
 
@@ -49,7 +52,7 @@
 | Apr 22, 2026 | Extraction resilience: charThreshold, fallback, retry ladder, dialog detection, CDN referrer rules for FB/Instagram |
 | May 17, 2026 | FB post permalink extraction (Priority 0b); Reader edit mode; Sidepanel Merge & Create PDF |
 | May 20, 2026 | Reader ES-module split (`reader/*.js`); ChatGPT extractor (Priority 0a); right-click context menu; ping guard; "Hide launcher" |
-| May 25, 2026 | Reader auth button first-load fix (position CSS + onerror fallback) |
+| May 25, 2026 | Reader auth button first-load fix (position CSS + onerror fallback); Supabase cloud sync (background fire-and-forget on save/delete/edit); EPUB/HTML file upload to reader (`reader/upload.js`); edit mode now persists to reading list via `updateArticleContent` |
 
 ---
 
@@ -63,6 +66,7 @@
 6. **Feedback links** — static anchors to `https://readeasy.featurebase.app/`; no article payload sent
 7. **Reader Merge EPUBs** — static link to `https://merge-epubs.vercel.app/`; no payload sent
 8. **Ping contract** — background sends `{ action: 'ping' }` before injecting `selection.js` on re-enable; `{ alive: true }` response → skip; no response → inject
+9. **Cloud sync contract** — `supabaseSyncArticle(localId, article)` is called after every successful `saveToReadingList` and `updateArticleContent`; `supabaseDeleteArticle(localId)` is called after every `deleteFromList`; `supabaseTouchArticle(url)` is called on duplicate detection; all three are fire-and-forget and never propagate errors
 
 ---
 
@@ -83,7 +87,7 @@
 13. CDN referrer rules use platform-specific referer (not `google.com`) for social CDNs
 14. FB permalink extraction fires before dialog check but returns null when logged in → Priority 1 dialog handles post modal
 15. Never include `[role="main"]` in `FB_POST_PERMALINK_SELECTORS` — it contains the full news feed when logged in
-16. Reader edit mode is session-only — edits go to `chrome.storage.session.currentArticle`; no persistent annotation store
+16. Reader edit mode always updates `chrome.storage.session.currentArticle`; if `state.currentArticleId != null` (article is in the reading list), edits also persist to IndexedDB via `updateArticleContent` and sync to Supabase
 17. Do NOT re-sanitize on edit mode Save — strips user's deliberate edits (images, links, note blocks)
 18. Note blocks must always use `hr.note-sep` above and below — EPUB export checks for these siblings
 19. `document.execCommand()` is the only viable formatting API in Chrome extension context; deprecated by spec but functional
@@ -93,6 +97,8 @@
 23. `reader.js` is a thin entry-point only — feature logic stays in `reader/*.js` modules
 24. Ping guard must remain on the floater re-enable path — unconditional injection causes duplicate launchers
 25. `#readerAuthBtn` needs `position: relative`; `.auth-guest-icon` and `.auth-avatar` need `position: absolute; inset: 0` — flex `align-self: stretch` breaks first-paint in Chrome extension pages
+26. Cloud sync helpers must never throw — wrap in try/catch and log warnings only; local save must succeed regardless of Supabase availability
+27. `state.currentArticleId` must be set from `saveToReadingList` response (`response.articleId`) — without it `persistEditToReadingList` is silently skipped
 
 ---
 
@@ -119,6 +125,9 @@
 - [ ] Save button persists edits; Cancel reverts all three regions (title, byline, body)
 - [ ] "Merge & Create PDF" button visible (red); opens blob tab with print dialog auto-triggered
 - [ ] Reader auth button shows SVG guest icon on FIRST load (not broken image); falls back on expired URL
+- [ ] Upload button in reader header opens file picker; EPUB parses chapters + images; opens in new reader tab
+- [ ] Edit mode Save on a reading-list article persists changes to IndexedDB (not just session storage)
+- [ ] Cloud sync: signed-in user saves an article → Supabase row created (check Supabase dashboard or logs)
 
 ---
 
@@ -141,7 +150,8 @@ chrome-extension/
 │   ├── edit-mode.js        Full edit-mode (enter/exit/formatting/links/images/notes)
 │   ├── tts.js              TTS playback + sendArticleToWebapp
 │   ├── flash-it.js         Flash It speed-reading engine (3 modes)
-│   └── epub.js             Single-article EPUB / HTML download / email-EPUB
+│   ├── epub.js             Single-article EPUB / HTML download / email-EPUB
+│   └── upload.js           EPUB/HTML file upload → parse → new reader tab
 │
 ├── sidepanel.html / sidepanel.js / sidepanel.css
 ├── sidepanel/
@@ -159,7 +169,12 @@ chrome-extension/
 ├── rules.json              declarativeNetRequest — CDN Referer header rules
 ├── libs/Readability.js     Mozilla Readability (do not modify)
 ├── libs/jszip.min.js       JSZip for EPUB (~100 KB)
-└── icons/                  icon16/32/48/128.png
+├── icons/                  icon16/32/48/128.png
+├── supabase/
+│   └── functions/
+│       ├── sync-article/index.ts    Deno edge fn — upsert article metadata + signed upload URL
+│       └── delete-article/index.ts  Deno edge fn — delete article from DB + storage
+└── docs/WEBAPP_INTEGRATION.md       Web app integration guide for Supabase cloud sync
 ```
 
 ---
@@ -195,3 +210,5 @@ chrome-extension/
 11. **Title edits must update both stores** — `readingListMeta` (UI) and IndexedDB `savedArticles` (EPUB source)
 12. **X4 Exclude Images is session-only** — `x4ExcludeImagesSession` in-memory; intentionally not persisted
 13. **X4 regen is race-guarded** — post-`await` UI/blob updates must check `x4RegenRequestId` for staleness
+14. **Cloud sync dedup uses djb2 hash** — `simpleHash()` in `background.js`; not crypto-secure; used only as a change-detection signal to skip redundant Supabase Storage uploads
+15. **`saveToReadingList` now returns `articleId`** — background always sends `{ success, articleId }` in response; reader modules capture this into `state.currentArticleId` to enable edit-mode persistence
