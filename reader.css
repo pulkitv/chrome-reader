@@ -132,6 +132,16 @@ body {
 
 #readerAuthBtn.signed-in .auth-avatar   { display: block; }
 #readerAuthBtn.signed-in .auth-guest-icon { display: none; }
+#readerAuthBtn.signed-in.avatar-fallback .auth-avatar { display: none; }
+#readerAuthBtn.signed-in.avatar-fallback .auth-guest-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 12px;
+  font-weight: 700;
+}
 
 .reader-auth-dropdown {
   position: absolute;

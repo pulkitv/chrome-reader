@@ -83,17 +83,41 @@ export function applyAuthUI() {
   const signedIn   = state.authState && state.authState.isSignedIn === true;
   const hasPicture = signedIn && state.authState.profile && state.authState.profile.picture;
 
+  function showAvatarFallback() {
+    authAvatar.removeAttribute('src');
+    authAvatar.hidden = true;
+    authGuestIcon.hidden = false;
+    authBtn.classList.add('avatar-fallback');
+  }
+
+  authBtn.classList.remove('avatar-fallback');
+
   authBtn.classList.toggle('signed-in',  signedIn);
   authBtn.classList.toggle('signed-out', !signedIn);
 
   if (signedIn && hasPicture) {
+    authAvatar.onerror = () => {
+      showAvatarFallback();
+    };
     authAvatar.src       = state.authState.profile.picture;
     authAvatar.hidden    = false;
     authGuestIcon.hidden = true;
 
+    authMenuAvatar.onerror = () => {
+      authMenuAvatar.removeAttribute('src');
+      authMenuAvatar.hidden = true;
+    };
     authMenuAvatar.src    = state.authState.profile.picture;
     authMenuAvatar.hidden = false;
+  } else if (signedIn) {
+    authAvatar.onerror = null;
+    authMenuAvatar.onerror = null;
+    showAvatarFallback();
+    authMenuAvatar.removeAttribute('src');
+    authMenuAvatar.hidden = true;
   } else {
+    authAvatar.onerror = null;
+    authMenuAvatar.onerror = null;
     authAvatar.removeAttribute('src');
     authAvatar.hidden    = true;
     authGuestIcon.hidden = false;

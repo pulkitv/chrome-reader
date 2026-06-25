@@ -70,27 +70,49 @@ export function applyReaderAuthUI() {
 
   const { isSignedIn, profile } = state.readerAuthState;
   const hasPicture = isSignedIn && profile.picture;
+  if (!guestIcon.dataset.defaultHtml) {
+    guestIcon.dataset.defaultHtml = guestIcon.innerHTML;
+  }
+  const fallbackLabel = ((profile.name || profile.email || 'A').trim().charAt(0).toUpperCase() || 'A');
+
+  function showAvatarFallback() {
+    avatar.removeAttribute('src');
+    avatar.hidden = true;
+    guestIcon.textContent = fallbackLabel;
+    guestIcon.hidden = false;
+    btn.classList.add('avatar-fallback');
+  }
+
+  btn.classList.remove('avatar-fallback');
 
   btn.classList.toggle('signed-in',  isSignedIn);
   btn.classList.toggle('signed-out', !isSignedIn);
 
   if (hasPicture) {
     avatar.onerror = () => {
-      avatar.removeAttribute('src');
-      avatar.hidden    = true;
-      guestIcon.hidden = false;
-      btn.classList.remove('signed-in');
-      btn.classList.add('signed-out');
+      showAvatarFallback();
     };
     avatar.src       = profile.picture;
     avatar.hidden    = false;
     guestIcon.hidden = true;
-    menuAvatar.src   = profile.picture;
+    menuAvatar.onerror = () => {
+      menuAvatar.removeAttribute('src');
+      menuAvatar.hidden = true;
+    };
+    menuAvatar.src    = profile.picture;
     menuAvatar.hidden = false;
+  } else if (isSignedIn) {
+    avatar.onerror = null;
+    menuAvatar.onerror = null;
+    showAvatarFallback();
+    menuAvatar.removeAttribute('src');
+    menuAvatar.hidden = true;
   } else {
     avatar.onerror    = null;
+    menuAvatar.onerror = null;
     avatar.removeAttribute('src');
     avatar.hidden     = true;
+    guestIcon.innerHTML = guestIcon.dataset.defaultHtml || guestIcon.innerHTML;
     guestIcon.hidden  = false;
     menuAvatar.removeAttribute('src');
     menuAvatar.hidden = true;

@@ -164,6 +164,14 @@ body {
   display: none;
 }
 
+.auth-btn.signed-in.avatar-fallback .auth-avatar {
+  display: none;
+}
+
+.auth-btn.signed-in.avatar-fallback .auth-guest-icon {
+  display: inline-flex;
+}
+
 .auth-menu-dropdown {
   min-width: 220px;
 }
