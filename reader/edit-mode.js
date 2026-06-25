@@ -39,10 +39,13 @@ export function enterEditMode() {
   const bylineEl = document.getElementById('articleByline');
   const bodyEl   = document.getElementById('articleBody');
 
-  // Snapshot all three for cancel-revert
-  state.preEditTitle   = titleEl.innerHTML;
-  state.preEditByline  = bylineEl.innerHTML;
-  state.preEditContent = bodyEl.innerHTML;
+  // Snapshot all three for cancel-revert (innerHTML) and for change detection
+  // (textContent for title/byline since those are persisted as plain text).
+  state.preEditTitle      = titleEl.innerHTML;
+  state.preEditByline     = bylineEl.innerHTML;
+  state.preEditContent    = bodyEl.innerHTML;
+  state.preEditTitleText  = titleEl.textContent.trim();
+  state.preEditBylineText = bylineEl.textContent.trim();
 
   titleEl.setAttribute('contenteditable',  'true');
   bylineEl.setAttribute('contenteditable', 'true');
@@ -88,22 +91,32 @@ export function exitEditMode(save) {
   const bodyEl   = document.getElementById('articleBody');
 
   if (save) {
-    // Persist edits so downstream actions (EPUB, Add to List) see the new content
-    chrome.storage.session.get('currentArticle').then(({ currentArticle }) => {
-      if (currentArticle) {
-        currentArticle.title   = titleEl.textContent.trim();
-        currentArticle.byline  = bylineEl.textContent.trim();
-        currentArticle.content = bodyEl.innerHTML;
-        chrome.storage.session.set({ currentArticle });
+    // Compare what's actually persisted: title/byline as text, body as innerHTML
+    // (body's innerHTML carries all formatting — bold, highlights, colors, images).
+    const titleChanged  = titleEl.textContent.trim()  !== state.preEditTitleText;
+    const bylineChanged = bylineEl.textContent.trim() !== state.preEditBylineText;
+    const bodyChanged   = bodyEl.innerHTML            !== state.preEditContent;
+
+    if (titleChanged || bylineChanged || bodyChanged) {
+      // Persist edits so downstream actions (EPUB, Add to List) see the new content
+      chrome.storage.session.get('currentArticle').then(({ currentArticle }) => {
+        if (currentArticle) {
+          currentArticle.title   = titleEl.textContent.trim();
+          currentArticle.byline  = bylineEl.textContent.trim();
+          currentArticle.content = bodyEl.innerHTML;
+          chrome.storage.session.set({ currentArticle });
+        }
+      });
+
+      // If the article is already in the reading list, update that entry too
+      if (state.currentArticleId != null) {
+        persistEditToReadingList(state.currentArticleId, titleEl, bodyEl).catch(() => {});
       }
-    });
 
-    // If the article is already in the reading list, update that entry too
-    if (state.currentArticleId != null) {
-      persistEditToReadingList(state.currentArticleId, titleEl, bodyEl).catch(() => {});
+      showNotification('Article saved', 'success');
+    } else {
+      showNotification('No changes to save', 'info');
     }
-
-    showNotification('Article saved', 'success');
   } else {
     // Revert to the snapshots taken in enterEditMode
     titleEl.innerHTML  = state.preEditTitle;

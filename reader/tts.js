@@ -18,6 +18,7 @@
 /* global chrome */
 
 import { TTS_WEBAPP_URL, state } from './state.js';
+import { autoSaveToReadingList } from './article.js';
 import {
   extractWordsFromArticle,
   changeFlashMode,
@@ -322,6 +323,14 @@ export async function sendArticleToWebapp() {
 
   const articleBody = document.getElementById('articleBody');
   if (!articleBody) return;
+
+  // If the user is signed in, sync the article to Supabase so it appears
+  // in their web app library. Fire-and-forget — opening the web app must
+  // not wait on the network. Dedup is handled server-side (same URL +
+  // same content_hash → only synced_at bumps; no duplicate row).
+  if (state.readerAuthState?.isSignedIn) {
+    autoSaveToReadingList().catch(() => {});
+  }
 
   // Bundle the reader CSS so the webapp can recreate the reading experience
   let cssText = '';

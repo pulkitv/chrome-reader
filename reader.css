@@ -402,6 +402,17 @@ body {
   display: none;
 }
 
+/* Compact variants for Voice select + Listen button (leftmost in reader nav) */
+.mode-select.tts-compact {
+  padding: 3px 6px;
+  font-size: 11px;
+  max-width: 130px;
+}
+
+.icon-btn.tts-compact {
+  padding: 4px;
+}
+
 #flashBtn.active {
   background-color: var(--link-color);
   color: white;

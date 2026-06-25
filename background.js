@@ -143,7 +143,7 @@ async function getInMemoryAuthToken() {
   return token;
 }
 
-async function supabaseSyncArticle(localId, article) {
+async function supabaseSyncArticle(localId, article, opts = {}) {
   try {
     const googleToken = await getInMemoryAuthToken();
     if (!googleToken) return;
@@ -155,11 +155,13 @@ async function supabaseSyncArticle(localId, article) {
       body: JSON.stringify({
         googleAccessToken: googleToken,
         localId,
-        title:       article.title    || '',
-        url:         article.url      || '',
-        siteName:    article.siteName || '',
-        addedDate:   article.addedDate || Date.now(),
+        title:        article.title    || '',
+        url:          article.url      || '',
+        siteName:     article.siteName || '',
+        addedDate:    article.addedDate || Date.now(),
         contentHash,
+        source:       'chrome_extension',
+        autoSaveOnly: !!opts.autoSaveOnly,
       })
     });
     if (!metaResp.ok) {
@@ -168,22 +170,37 @@ async function supabaseSyncArticle(localId, article) {
     }
     const result = await metaResp.json();
 
-    if (result.action === 'no_change') {
-      console.log('[ReadEasy] Content unchanged, timestamp updated:', localId);
+    // Touched (autoSaveOnly hit existing) or no_change (same hash) — nothing more to do.
+    if (result.action === 'touched' || result.action === 'no_change') {
+      console.log(`[ReadEasy] Cloud sync ${result.action}:`, result.articleId);
       return;
     }
 
-    const uploadResp = await fetch(result.signedUrl, {
+    // created | versioned — upload htmlContent to BOTH paths in parallel
+    const uploadOpts = {
       method: 'PUT',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'x-upsert':     'true'
+      },
       body: article.htmlContent
-    });
-    if (!uploadResp.ok) {
-      const body = await uploadResp.text();
-      throw new Error(`Storage upload: ${uploadResp.status} — ${body}`);
+    };
+
+    const [latestResp, versionResp] = await Promise.all([
+      fetch(result.latestSignedUrl,  uploadOpts),
+      fetch(result.versionSignedUrl, uploadOpts),
+    ]);
+
+    if (!latestResp.ok) {
+      const body = await latestResp.text();
+      throw new Error(`Storage upload (latest): ${latestResp.status} — ${body}`);
+    }
+    if (!versionResp.ok) {
+      const body = await versionResp.text();
+      throw new Error(`Storage upload (v${result.versionNumber}): ${versionResp.status} — ${body}`);
     }
 
-    console.log('[ReadEasy] Article synced to cloud (' + result.action + '):', localId);
+    console.log(`[ReadEasy] Article synced (${result.action} v${result.versionNumber}):`, result.articleId);
   } catch (err) {
     console.warn('[ReadEasy] Cloud sync failed (non-fatal):', err.message);
   }
@@ -203,7 +220,7 @@ async function supabaseTouchArticle(url) {
   }
 }
 
-async function supabaseDeleteArticle(localId) {
+async function supabaseDeleteArticle(localId, url) {
   try {
     const googleToken = await getInMemoryAuthToken();
     if (!googleToken) return;
@@ -211,7 +228,7 @@ async function supabaseDeleteArticle(localId) {
     await fetch(`${SUPABASE_URL}/functions/v1/delete-article`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ googleAccessToken: googleToken, localId })
+      body: JSON.stringify({ googleAccessToken: googleToken, localId, url })
     });
     console.log('[ReadEasy] Article deleted from cloud:', localId);
   } catch (err) {
@@ -577,14 +594,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const oldest = await getOldestArticle();
           if (oldest) {
             await deleteArticle(oldest.id);
-            supabaseDeleteArticle(oldest.id);
+            supabaseDeleteArticle(oldest.id, oldest.url);
             console.log('Deleted oldest article to make room:', oldest.title);
           }
         }
-        
+
         // Add article to IndexedDB
         const articleId = await addArticle(message.article);
-        supabaseSyncArticle(articleId, { ...message.article, addedDate: Date.now() });
+        // autoSaveOnly: this is the silent save-on-open / save-on-add path.
+        // For existing cloud articles → just touch synced_at, no new version.
+        // For brand-new articles → first capture (creates v1) regardless.
+        supabaseSyncArticle(articleId, { ...message.article, addedDate: Date.now() }, { autoSaveOnly: true });
         console.log('Article saved to IndexedDB:', articleId);
         
         // Update metadata in chrome.storage.local
@@ -640,12 +660,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
       }
       else if (message.action === 'deleteFromList') {
+        // Look up the URL from metadata BEFORE deleting (Edge Function uses
+        // it to find the article + clean up the per-article storage dir).
+        const { readingListMeta = [] } = await chrome.storage.local.get('readingListMeta');
+        const meta = readingListMeta.find(item => item.id === message.id);
+
         // Delete from IndexedDB
         await deleteArticle(message.id);
-        supabaseDeleteArticle(message.id);
-        
-        // Update metadata in chrome.storage.local
-        const { readingListMeta = [] } = await chrome.storage.local.get('readingListMeta');
+        supabaseDeleteArticle(message.id, meta?.url);
+
         const updatedMeta = readingListMeta.filter(item => item.id !== message.id);
         await chrome.storage.local.set({ readingListMeta: updatedMeta });
         

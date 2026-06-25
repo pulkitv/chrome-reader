@@ -27,11 +27,13 @@ export const state = {
   currentArticleId: null,  // IndexedDB id of the currently displayed article once saved
 
   // ── Edit mode ────────────────────────────────────────────────────────────
-  isEditMode:     false,
-  preEditContent: '',        // innerHTML snapshot of #articleBody before editing
-  preEditTitle:   '',        // innerHTML snapshot of #articleTitle before editing
-  preEditByline:  '',        // innerHTML snapshot of #articleByline before editing
-  savedLinkRange: null,      // Selection range preserved while link popover is open
+  isEditMode:        false,
+  preEditContent:    '',     // innerHTML snapshot of #articleBody before editing
+  preEditTitle:      '',     // innerHTML snapshot of #articleTitle before editing
+  preEditByline:     '',     // innerHTML snapshot of #articleByline before editing
+  preEditTitleText:  '',     // trimmed textContent — used for change detection (title is saved as text)
+  preEditBylineText: '',     // trimmed textContent — used for change detection (byline is saved as text)
+  savedLinkRange:    null,   // Selection range preserved while link popover is open
 
   // ── Reader auth ──────────────────────────────────────────────────────────
   readerAuthState: {
