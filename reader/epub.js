@@ -1,14 +1,11 @@
 /**
- * reader/epub.js — EPUB generation, HTML download, and email-EPUB flow.
+ * reader/epub.js — EPUB generation and HTML download.
  *
  * Exports:
  *   openDownloadModal()    — show the download-format modal
  *   closeDownloadModal()   — hide the download modal
  *   downloadArticleHTML()  — build a standalone HTML file and trigger download
  *   downloadArticleEPUB()  — build an EPUB 3 file (requires JSZip) and trigger download
- *   openEmailEpubModal()   — show the email-recipient modal
- *   closeEmailEpubModal()  — hide the email modal
- *   emailArticleEPUB()     — generate EPUB, open mailto link, show instructions overlay
  */
 
 /* global chrome, JSZip */
@@ -228,45 +225,6 @@ export async function downloadArticleEPUB() {
   }, filename, imageMap);
 }
 
-// ── Email EPUB modal ──────────────────────────────────────────────────────────
-
-export function openEmailEpubModal() {
-  const modal      = document.getElementById('emailEpubModal');
-  const emailInput = document.getElementById('recipientEmailInput');
-  modal.classList.add('show');
-  emailInput.value = '';
-  emailInput.focus();
-}
-
-export function closeEmailEpubModal() {
-  document.getElementById('emailEpubModal').classList.remove('show');
-}
-
-export function emailArticleEPUB() {
-  const emailInput     = document.getElementById('recipientEmailInput');
-  const recipientEmail = emailInput.value.trim();
-
-  if (!recipientEmail) { alert('Please enter a recipient email address'); emailInput.focus(); return; }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) { alert('Please enter a valid email address'); emailInput.focus(); return; }
-
-  closeEmailEpubModal();
-
-  const title    = document.getElementById('articleTitle').textContent;
-  const filename = title.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').substring(0, 50).toLowerCase();
-
-  _showEmailInstructions(recipientEmail, filename, title);
-  downloadArticleEPUB();
-
-  setTimeout(() => {
-    const subject = encodeURIComponent(`Article: ${title}`);
-    const body    = encodeURIComponent(
-      `Hi,\n\nI'm sharing this article with you: "${title}"\n\n` +
-      `I've attached it as an EPUB file.\n\nBest regards`
-    );
-    window.location.href = `mailto:${recipientEmail}?subject=${subject}&body=${body}`;
-  }, 1000);
-}
-
 // ── Internal EPUB helpers ─────────────────────────────────────────────────────
 
 /** Convert HTML to XHTML-compliant format required by EPUB 3. */
@@ -422,33 +380,3 @@ th{background:#f5f5f5;font-weight:600;}
 .note-block{background-color:rgba(255,200,0,.12);border-left:4px solid #0066cc;border-radius:4px;padding:12px 16px;margin:20px 0;font-size:.95em;}`;
 }
 
-// ── Email instructions overlay ────────────────────────────────────────────────
-
-function _showEmailInstructions(email, filename, title) {
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:5000;display:flex;align-items:center;justify-content:center;animation:fadeIn .3s;';
-
-  const card = document.createElement('div');
-  card.style.cssText = 'background:#fff;border-radius:12px;padding:32px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3);animation:slideUp .3s;';
-  card.innerHTML = `
-    <div style="text-align:center;">
-      <div style="font-size:48px;margin-bottom:16px;">📧</div>
-      <h2 style="margin:0 0 16px;color:#1a1a1a;font-size:1.5em;">Email Instructions</h2>
-      <div style="text-align:left;line-height:1.6;color:#333;margin-bottom:24px;">
-        <p style="margin-bottom:12px;">✅ <strong>EPUB file is downloading…</strong></p>
-        <p style="margin-bottom:12px;">✉️ <strong>Your email client will open shortly</strong></p>
-        <p style="margin-bottom:12px;">📎 <strong>Please attach the downloaded file:</strong><br/>
-          <code style="background:#f5f5f5;padding:4px 8px;border-radius:4px;font-size:.9em;">${filename}.epub</code></p>
-        <p>📨 <strong>To:</strong> ${email}</p>
-      </div>
-      <button id="_emailGotIt" style="background:#4caf50;color:#fff;border:none;padding:12px 32px;font-size:16px;font-weight:600;border-radius:8px;cursor:pointer;">Got it!</button>
-    </div>`;
-
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
-
-  const dismiss = () => { overlay.style.animation = 'fadeOut .3s'; setTimeout(() => overlay.remove(), 300); };
-  card.querySelector('#_emailGotIt').addEventListener('click', dismiss);
-  overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(); });
-  setTimeout(dismiss, 8000);
-}

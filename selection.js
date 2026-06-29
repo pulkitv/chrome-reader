@@ -75,6 +75,19 @@
     return Math.min(Math.max(value, min), max);
   }
 
+  // After an extension reload, this content script keeps running but its
+  // chrome.* bridge is severed — every storage/runtime call throws
+  // "Extension context invalidated". Detect that and tear the floater down
+  // so it doesn't sit on the page as a non-functional zombie.
+  function isExtensionContextValid() {
+    try { return !!(chrome.runtime && chrome.runtime.id); } catch (_) { return false; }
+  }
+  function bailIfContextInvalidated() {
+    if (isExtensionContextValid()) return false;
+    try { removeFloatingButton(); } catch (_) {}
+    return true;
+  }
+
   function getViewportBoundedPosition(left, top, width, height) {
     const maxLeft = Math.max(0, window.innerWidth - width - 8);
     const maxTop = Math.max(0, window.innerHeight - height - 8);
@@ -218,6 +231,7 @@
       e.preventDefault();
       e.stopPropagation();
       closeFloatingMenu();
+      if (bailIfContextInvalidated()) return;
       try {
         const result = await chrome.runtime.sendMessage({ action: 'openReaderView' });
         if (!result || !result.success) {
@@ -245,6 +259,7 @@
       e.preventDefault();
       e.stopPropagation();
       closeFloatingMenu();
+      if (bailIfContextInvalidated()) return;
       chrome.runtime.sendMessage({ action: 'openSidePanel' }).catch((err) => {
         console.warn('[ReadEasy Floating Button] Failed to open side panel:', err);
       });
@@ -278,6 +293,7 @@
       e.preventDefault();
       e.stopPropagation();
       closeFloatingMenu();
+      if (bailIfContextInvalidated()) return;
       chrome.storage.sync.set({ [FLOATING_BUTTON_ENABLED_KEY]: false });
       chrome.runtime.sendMessage({ action: 'floaterSettingChanged', enabled: false }).catch(() => {});
     });
@@ -368,6 +384,7 @@
   }
 
   async function saveFloatingButtonPosition(left, top) {
+    if (bailIfContextInvalidated()) return;
     try {
       await chrome.storage.sync.set({
         [FLOATING_BTN_POS_KEY]: { left, top }

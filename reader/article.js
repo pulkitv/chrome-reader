@@ -14,6 +14,7 @@
 /* global chrome */
 
 import { state } from './state.js';
+import { refreshSavedArticlesCount } from './cloud-count.js';
 
 // ── Article rendering ─────────────────────────────────────────────────────────
 
@@ -240,6 +241,7 @@ export async function handleAddToReadingList() {
     if (response.articleId != null) state.currentArticleId = response.articleId;
 
     showNotification('Added to Reading List ✓', 'success');
+    refreshSavedArticlesCount();
   } catch (error) {
     console.error('[ReadEasy] Error adding to reading list:', error);
     showNotification('Failed to add article: ' + error.message, 'error');

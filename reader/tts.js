@@ -12,13 +12,9 @@
  *   pauseTtsPlayback()    — pause the current utterance
  *   resumeTtsPlayback()   — resume after a pause
  *   stopTtsPlayback()     — cancel playback and clean up
- *   sendArticleToWebapp() — open the ReadEasy webapp and hand off article HTML
  */
 
-/* global chrome */
-
-import { TTS_WEBAPP_URL, state } from './state.js';
-import { autoSaveToReadingList } from './article.js';
+import { state } from './state.js';
 import {
   extractWordsFromArticle,
   changeFlashMode,
@@ -309,62 +305,3 @@ function _updateTtsButton(playState) {
   btn.title     = playState === 'playing' ? 'Pause' : 'Listen';
 }
 
-// ── Open in ReadEasy webapp ───────────────────────────────────────────────────
-
-/**
- * Open the ReadEasy webapp in a new tab and post the current article HTML
- * to it via postMessage once the webapp signals it is ready.
- */
-export async function sendArticleToWebapp() {
-  if (!TTS_WEBAPP_URL || TTS_WEBAPP_URL.includes('your-webapp')) {
-    alert('Set TTS_WEBAPP_URL in reader/state.js');
-    return;
-  }
-
-  const articleBody = document.getElementById('articleBody');
-  if (!articleBody) return;
-
-  // If the user is signed in, sync the article to Supabase so it appears
-  // in their web app library. Fire-and-forget — opening the web app must
-  // not wait on the network. Dedup is handled server-side (same URL +
-  // same content_hash → only synced_at bumps; no duplicate row).
-  if (state.readerAuthState?.isSignedIn) {
-    autoSaveToReadingList().catch(() => {});
-  }
-
-  // Bundle the reader CSS so the webapp can recreate the reading experience
-  let cssText = '';
-  try {
-    const cssUrl  = chrome.runtime.getURL('reader.css');
-    const cssResp = await fetch(cssUrl);
-    cssText       = await cssResp.text();
-  } catch (err) {
-    console.warn('[ReadEasy] Failed to load reader.css for webapp handoff:', err);
-  }
-
-  const payload = {
-    type:      'readeasy-article',
-    title:     document.getElementById('articleTitle')?.textContent  || '',
-    byline:    document.getElementById('articleByline')?.textContent || '',
-    siteName:  document.getElementById('articleSite')?.textContent   || '',
-    sourceUrl: document.getElementById('sourceLink')?.href           || '',
-    html:      articleBody.innerHTML,
-    cssText
-  };
-
-  const targetOrigin  = new URL(TTS_WEBAPP_URL).origin;
-  const webappWindow  = window.open(TTS_WEBAPP_URL, '_blank');
-  if (!webappWindow) { alert('Please allow popups for this site.'); return; }
-
-  const sendPayload = () => webappWindow.postMessage(payload, targetOrigin);
-
-  // Listen for the webapp's ready signal, fall back to a 1.5 s timer
-  const handler = event => {
-    if (event.origin === targetOrigin && event.data === 'readeasy-ready') {
-      sendPayload();
-      window.removeEventListener('message', handler);
-    }
-  };
-  window.addEventListener('message', handler);
-  setTimeout(sendPayload, 1500);
-}

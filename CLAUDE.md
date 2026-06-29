@@ -77,8 +77,9 @@ Both stores **must be kept in sync** on every add/delete/title-update.
 10. **EPUB `mimetype` entry must use `{ compression: 'STORE' }`** — required by EPUB spec.
 11. **`declarativeNetRequest` rules require extension reload** — Chrome rebuilds `_metadata/` on reload.
 12. **`#readerAuthBtn` needs `position: relative`; `.auth-guest-icon` and `.auth-avatar` need `position: absolute; inset: 0`** — `align-self: stretch` silently fails on first paint in Chrome extension pages.
-13. **Cloud sync is fire-and-forget** — `supabaseSyncArticle`, `supabaseDeleteArticle`, `supabaseTouchArticle` catch all errors internally; never gate the save/delete flow on Supabase availability.
+13. **Cloud sync is fire-and-forget** — `supabaseSyncArticle` and `supabaseDeleteArticle` catch all errors internally; never gate the save/delete flow on Supabase availability. The duplicate-detected re-save path also goes through `supabaseSyncArticle(..., { autoSaveOnly: true })` so a missing cloud row gets healed by the server's first-capture fallback.
 14. **`state.currentArticleId` must be populated from `saveToReadingList` response** — `response.articleId` is set by background on save; without it, edit-mode changes cannot persist to the reading list entry.
+15. **Webapp-created draft rows exist in Supabase** — the web app can create `articles` rows with `url = 'webapp://draft/<uuid>'` and `site_name = 'Web App'`. The extension currently never reads from Supabase, so this is inert for the extension today. If/when cloud-pull is added: treat these as display-only (no `chrome.tabs.create`, no re-extraction, no image refetch); prefer `site_name` over a derived hostname.
 
 ---
 

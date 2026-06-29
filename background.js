@@ -207,24 +207,6 @@ async function supabaseSyncArticle(localId, article, opts = {}) {
   }
 }
 
-async function supabaseCountArticles() {
-  try {
-    const googleToken = await getInMemoryAuthToken();
-    if (!googleToken) return null;
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/get-user-plan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ googleAccessToken: googleToken })
-    });
-    if (!resp.ok) return null;
-    const { articleCount: count } = await resp.json();
-    return typeof count === 'number' ? count : null;
-  } catch (err) {
-    console.warn('[ReadEasy] Cloud count failed (non-fatal):', err.message);
-    return null;
-  }
-}
-
 async function supabaseGetUserPlan() {
   try {
     const googleToken = await getInMemoryAuthToken();
@@ -721,10 +703,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         
         sendResponse({ success: true });
-      }
-      else if (message.action === 'getCloudArticleCount') {
-        const count = await supabaseCountArticles();
-        sendResponse({ count });
       }
       else if (message.action === 'getUserPlan') {
         const plan = await supabaseGetUserPlan();
