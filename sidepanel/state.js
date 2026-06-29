@@ -17,6 +17,7 @@ export const X4_SETTINGS_KEY           = 'x4Settings';
 export const FLOATING_BUTTON_ENABLED_KEY = 'floatingButtonEnabled';
 export const AUTH_STATE_KEY            = 'authState';
 export const AUTH_PROVIDER_GOOGLE      = 'google';
+export const READEASY_PRO_CHECKOUT_URL = 'https://checkout.dodopayments.com/buy/pdt_0NhrebkSf6BNYIxwThp3A?quantity=1';
 
 export const PANEL_DISPLAY_STATE_KEY = 'panelDisplayState';
 export const PANEL_STATE_OPEN        = 'open';

@@ -83,6 +83,21 @@ body {
   gap: 8px;
 }
 
+.pro-header-btn {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(11, 103, 209, 0.35);
+  border-radius: 999px;
+  background: var(--bg-color);
+  color: var(--primary-color);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pro-header-btn:hover:not(:disabled) {
+  background: rgba(11, 103, 209, 0.08);
+}
+
 .header-control {
   position: relative;
 }

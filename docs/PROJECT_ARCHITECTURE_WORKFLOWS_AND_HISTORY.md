@@ -1,6 +1,6 @@
 # ReadEasy — Workflows, Function Reference & Quick Reference
 
-> Last updated: May 25, 2026
+> Last updated: June 29, 2026
 
 ---
 
@@ -64,7 +64,8 @@
 |----------|---------|
 | `supabaseSyncArticle(localId, article)` | Sends article metadata + djb2 hash to `sync-article` edge fn; on `no_change` returns early; otherwise PUTs HTML to signed Supabase Storage URL |
 | `supabaseDeleteArticle(localId)` | Calls `delete-article` edge fn to remove DB row + storage file |
-| `supabaseTouchArticle(url)` | Calls `sync-article` with `touchOnly: true` to bump `synced_at` on duplicate detection |
+| `supabaseGetUserPlan()` | Calls `get-user-plan` edge fn to return Pro status, article limit, and cloud article count |
+| `evictOldestLocalArticlesUntilBelow(limit)` | Deletes oldest local articles until the free user is below the cap before a new save |
 | `updateArticleContent(id, { title, htmlContent })` | IndexedDB readwrite: fetches existing article, updates title + htmlContent, puts back |
 | `simpleHash(str)` | djb2 hash (not crypto-secure); used as content-change signal to skip redundant Supabase uploads |
 
@@ -179,10 +180,11 @@ Then reload the extension — Chrome rebuilds `_metadata/`.
 | EPUB/HTML file upload | `reader/upload.js` | `initUpload()`, `parseEpub()`, `parseHtmlFile()` |
 | Cloud sync (save/edit) | `background.js` | `supabaseSyncArticle()` |
 | Cloud sync (delete) | `background.js` | `supabaseDeleteArticle()` |
-| Cloud sync (touch) | `background.js` | `supabaseTouchArticle()` |
+| Pro plan lookup | `background.js` + `supabase/functions/get-user-plan/` | `supabaseGetUserPlan()` / `get-user-plan` |
+| Free cap eviction | `background.js` + `supabase/functions/sync-article/` | `evictOldestLocalArticlesUntilBelow()` / `ensureFreeArticleSlot()` |
 | Edit → IndexedDB persist | `background.js` + `reader/edit-mode.js` | `updateArticleContent` message / `persistEditToReadingList()` |
 | Reader article ID tracking | `reader/state.js` | `state.currentArticleId` |
-| Supabase edge functions | `supabase/functions/` | `sync-article/index.ts`, `delete-article/index.ts` |
+| Supabase edge functions | `supabase/functions/` | `sync-article/index.ts`, `delete-article/index.ts`, `get-user-plan/index.ts` |
 
 ---
 

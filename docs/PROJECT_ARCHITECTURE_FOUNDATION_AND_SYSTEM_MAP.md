@@ -1,12 +1,12 @@
 # ReadEasy Extension — Architecture Foundation & System Map
 
-> Last updated: May 25, 2026
+> Last updated: June 29, 2026
 
 > **Maintenance rules:** Update this file on every architectural change (new file roles, message actions, storage keys, components). Keep the canonical snapshot current. Append new phases to the timeline — never edit history. Both FOUNDATION and SUMMARY must be updated together and must not contradict each other.
 
 ---
 
-## May 25, 2026 — Canonical Architecture Snapshot
+## June 29, 2026 — Canonical Architecture Snapshot
 
 1. **Core extraction path** — `background.js` injects `libs/Readability.js` + `content.js`; extracted article stored in `chrome.storage.session.currentArticle`; `reader.html` renders via `reader.js` (ES-module entry-point)
 
@@ -44,11 +44,13 @@
 
 18. **Reader auth button first-load fix** (May 25, 2026) — reader `.icon-btn` sets `display: flex` which broke `align-self: stretch` on first paint; fix: `#readerAuthBtn { position: relative }`, `.auth-guest-icon` and `.auth-avatar` use `position: absolute; inset: 0`; `onerror` handler reverts avatar to guest state on expired Google CDN URL
 
-19. **Supabase cloud sync** (May 25, 2026) — `background.js` fires-and-forgets to two Deno edge functions hosted on `pcyjafpopnjtjqaelycy.supabase.co`; Google access token verified server-side; djb2 `contentHash` skips redundant uploads; three paths: `supabaseSyncArticle` (save/edit), `supabaseDeleteArticle` (delete), `supabaseTouchArticle` (duplicate hit); Supabase `public.articles` table + `article-content` private storage bucket; `simpleHash()` djb2 in background.js; `updateArticleContent` message action added for edit-mode persistence
+19. **Supabase cloud sync** (May 25, 2026; extended June 29, 2026) — `background.js` fires-and-forgets to Deno edge functions hosted on `pcyjafpopnjtjqaelycy.supabase.co`; Google access token verified server-side; djb2 `contentHash` skips redundant uploads; `supabaseSyncArticle` handles save/edit/duplicate heal, `supabaseDeleteArticle` handles delete, and `get-user-plan` returns Pro entitlement + article count; Supabase `public.articles` table + `article-content` private storage bucket; `simpleHash()` djb2 in background.js; `updateArticleContent` message action added for edit-mode persistence
 
 20. **EPUB/HTML file upload to reader** (May 25, 2026) — `reader/upload.js` new module; `#uploadFileBtn` + hidden `#uploadFileInput` in reader header; EPUB parsed via JSZip (spine order, chapter concat, image pre-cache as base64 data URIs, `resolveZipPath` for relative hrefs); HTML parsed via DOMParser; result written to `chrome.storage.session.currentArticle` and opened in new reader tab
 
 21. **Edit mode reading-list persistence** (May 25, 2026) — `state.currentArticleId` (new field in `reader/state.js`) is populated from `saveToReadingList` response `articleId`; `exitEditMode(save)` calls `persistEditToReadingList(articleId, titleEl, bodyEl)` which re-fetches remote images as PNG then sends `{ action: 'updateArticleContent', id, title, htmlContent }` to background; background updates IndexedDB, metadata, and Supabase
+
+22. **Dodo Payments / ReadEasy Pro** (June 29, 2026) — Dodo checkout uses `https://checkout.dodopayments.com/buy/pdt_0NhrebkSf6BNYIxwThp3A?quantity=1`; Dodo webhook events update Supabase `public.user_entitlements`; Chrome auth Google email is matched against `google_email_lower`; free users are capped at 10 articles by oldest-first eviction; Pro users are unlimited; reader and sidepanel upgrade CTAs hide when `get-user-plan` reports Pro
 
 ---
 
@@ -78,6 +80,7 @@
 | T | — | ChatGPT extractor Priority 0a; right-click context menu; ping guard on re-enable; "Hide launcher" in floater menu |
 | U | — | Reader auth button first-load fix: `position: absolute; inset: 0` CSS + `onerror` fallback |
 | V | `3ed2334` | Supabase cloud sync (3 background helpers + 2 edge functions); EPUB/HTML file upload (`reader/upload.js`); edit-mode reading-list persistence (`updateArticleContent` message + `state.currentArticleId`) |
+| W | — | Dodo Payments / ReadEasy Pro: `get-user-plan`, `user_entitlements` plan lookup, free 10-article cap enforcement, Pro upgrade links in reader and sidepanel |
 
 ---
 
@@ -92,6 +95,8 @@
 - `{ action: 'deleteFromList', id }` (also triggers `supabaseDeleteArticle`)
 - `{ action: 'updateArticleTitle', id, title }`
 - `{ action: 'updateArticleContent', id, title, htmlContent }` → background updates IndexedDB, metadata, and Supabase; broadcasts `listUpdated`
+- `{ action: 'getUserPlan' }` → response: `{ success, isSignedIn, isPro, articleLimit, articleCount }`; used by reader and sidepanel to render upgrade/pro state
+- `{ action: 'getCloudArticleCount' }` → legacy count response `{ count }`; internally backed by `get-user-plan`
 - `{ action: 'openSidePanel' }`
 - `{ action: 'openReaderView' }`
 - `{ action: 'authSignIn' }` / `{ action: 'authGetState' }` / `{ action: 'authSignOut' }`
@@ -110,6 +115,12 @@
 **5. Synced auth state contract**
 - `chrome.storage.sync.authState` — shape: `{ isSignedIn, provider, profile: { email, name, picture }, lastSignInAt }`
 - Signed-out state: normalized to empty profile and `lastSignInAt: null`
+
+**6. ReadEasy Pro entitlement contract**
+- Dodo checkout/payment status is never trusted from the extension client
+- Supabase `dodo-webhook` maps payment/subscription events into `public.user_entitlements`
+- `get-user-plan` verifies the Google token, lowercases the Google email, reads `user_entitlements.google_email_lower`, counts `articles`, and returns `{ isPro, articleLimit, articleCount }`
+- Free users have `articleLimit: 10`; Pro users have `articleLimit: null`
 
 ---
 
@@ -136,8 +147,10 @@
 19. Ping guard (`{ action: 'ping' }` before inject) must remain on the floater re-enable path
 20. `#readerAuthBtn` must keep `position: relative`; `.auth-guest-icon` and `.auth-avatar` must use `position: absolute; inset: 0` — reverting to flex `align-self: stretch` breaks first-paint in Chrome extension pages
 21. Edit mode `exitEditMode(save)` always updates session storage; additionally calls `persistEditToReadingList` when `state.currentArticleId != null` — do not skip this path or reading-list edits will be lost on tab close
-22. Cloud sync helpers (`supabaseSyncArticle`, `supabaseDeleteArticle`, `supabaseTouchArticle`) must never propagate errors — wrap all Supabase calls in try/catch; local save must succeed regardless of Supabase availability
+22. Cloud sync helpers (`supabaseSyncArticle`, `supabaseDeleteArticle`, `supabaseGetUserPlan`) must never propagate errors — wrap all Supabase calls in try/catch; local save must succeed regardless of Supabase availability
 23. `state.currentArticleId` is populated from `response.articleId` returned by `saveToReadingList`; if this population is removed, edit-mode persistence silently stops working
+24. Free cap enforcement must exist in both places: local IndexedDB eviction in `background.js` and cloud eviction in `sync-article`; Pro users must bypass both caps
+25. Pro UI visibility must come from `get-user-plan`, not from local payment assumptions
 
 ---
 
@@ -166,6 +179,8 @@
 - [ ] Upload button in reader header opens file picker; EPUB parses to readable article in new tab
 - [ ] Edit mode Save on a reading-list article persists to IndexedDB (edits survive tab re-open)
 - [ ] Signed-in user save triggers cloud sync (check Supabase `articles` table or background console logs)
+- [ ] Free signed-in user saving an 11th article evicts the oldest article locally and in Supabase
+- [ ] Pro signed-in user can save more than 10 articles; reader and sidepanel upgrade buttons hide
 
 ---
 
@@ -217,7 +232,7 @@ User Click
 1. `handleAddToReadingList()` collects `<img src="http…">` from `#articleBody`
 2. `fetchImageAsPng(url)` — 20 s AbortController; blob → objectURL → canvas → PNG; `Promise.allSettled`
 3. Raw `innerHTML` patched with `split+join` (never RegExp) to replace URLs with data URIs
-4. `chrome.runtime.sendMessage({ action: 'saveToReadingList' })` → background deduplicates, evicts oldest if ≥10, writes to IndexedDB + metadata, broadcasts `listUpdated`
+4. `chrome.runtime.sendMessage({ action: 'saveToReadingList' })` → background deduplicates, checks `get-user-plan`, evicts oldest only for non-Pro users at the 10-article cap, writes to IndexedDB + metadata, broadcasts `listUpdated`
 
 **"Add to List" from regular tab (sidepanel):**
 1. `handleAddToListFromRegularTab()` injects Readability + content.js via `chrome.scripting.executeScript`
@@ -243,8 +258,15 @@ User Click
 **Cloud sync (fire-and-forget):**
 1. After `saveToReadingList` → `supabaseSyncArticle(articleId, article)` — djb2 hash sent to `sync-article` edge fn; if `no_change` skips upload; otherwise upserts metadata and uploads HTML to Supabase Storage via signed URL
 2. After `deleteFromList` → `supabaseDeleteArticle(localId)` — `delete-article` edge fn removes row + storage file
-3. On duplicate detection → `supabaseTouchArticle(url)` — `sync-article` with `touchOnly: true` bumps `synced_at`
+3. On duplicate detection → `supabaseSyncArticle(localId, article, { autoSaveOnly: true })` — touches an existing row or heals a missing cloud row without blocking local UX
 4. After edit-mode Save → `updateArticleContent` message → background updates IndexedDB then calls `supabaseSyncArticle` with new content
+5. `sync-article` enforces the free cap server-side by deleting oldest Supabase articles until the signed-in non-Pro user is below 10 before inserting a new article; Pro users bypass this check via `user_entitlements`
+
+**ReadEasy Pro lookup:**
+1. Reader or sidepanel sends `{ action: 'getUserPlan' }`
+2. Background gets the in-memory Google token and calls `get-user-plan`
+3. `get-user-plan` verifies Google userinfo, matches lowercased email to `user_entitlements.google_email_lower`, counts cloud articles by `google_uid`, and returns plan/count data
+4. Reader hides **Get ReadEasy Pro** and shows a Pro badge when Pro; sidepanel hides its Pro button and shows `Pro` in storage info
 
 **Merge & Send to X4:**
 1. Loads articles from IndexedDB; opens modal; generates EPUB blob
@@ -262,7 +284,7 @@ chrome-extension/
 │                            identity/oauth2, content scripts, web-accessible resources, CSP
 ├── background.js            Service worker — toolbar click, IndexedDB helpers,
 │                            saveToReadingList / deleteFromList / updateArticleTitle,
-│                            open-sidepanel/open-reader, auth handlers,
+│                            open-sidepanel/open-reader, auth handlers, Pro plan lookup,
 │                            floater rebroadcast, context menu
 ├── content.js               Injected content script — Readability extraction, URL normalisation,
 │                            ChatGPT/FB/dialog/fallback extraction paths
@@ -277,6 +299,7 @@ chrome-extension/
 │   ├── article.js           Article load/sanitise/lazy-load; reading-list save; toast
 │   ├── preferences.js       Theme, font size, reading width, progress bar, pref persist
 │   ├── auth.js              Reader header auth UI; sign-in/out handlers; authUpdated handler
+│   ├── cloud-count.js       Saved-count UI, Pro UI state, Dodo checkout/webapp open helpers
 │   ├── edit-mode.js         Full edit-mode: enter/exit, formatting, links, images, notes
 │   ├── tts.js               Text-to-Speech playback + sendArticleToWebapp
 │   ├── flash-it.js          Flash It speed-reading engine (3 modes, word extraction, timing)
@@ -309,8 +332,10 @@ chrome-extension/
 ├── readeasy-postmessage-listener.js   Helper for web apps receiving postMessage
 ├── supabase/
 │   └── functions/
-│       ├── sync-article/index.ts    Deno edge fn — verify Google token, upsert metadata, return signed upload URL
-│       └── delete-article/index.ts  Deno edge fn — verify Google token, delete row + storage file
+│       ├── sync-article/index.ts    Deno edge fn — verify Google token, upsert metadata, return signed upload URL, enforce free cap
+│       ├── delete-article/index.ts  Deno edge fn — verify Google token, delete row + storage file
+│       ├── get-user-plan/index.ts   Deno edge fn — verify Google token, return entitlement + article count
+│       └── count-articles/index.ts  Legacy/count helper for signed-in cloud article counts
 └── docs/WEBAPP_INTEGRATION.md       Web app integration guide (Supabase schema, auth, code examples)
 ```
 

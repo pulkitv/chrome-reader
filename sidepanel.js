@@ -15,7 +15,8 @@ import {
   AUTH_STATE_KEY,
   FLOATING_BUTTON_ENABLED_KEY,
   PANEL_DISPLAY_STATE_KEY,
-  PANEL_STATE_USER_CLOSED
+  PANEL_STATE_USER_CLOSED,
+  READEASY_PRO_CHECKOUT_URL
 } from './sidepanel/state.js';
 
 import { showToast }                                   from './sidepanel/utils.js';
@@ -85,6 +86,7 @@ function setupEventListeners() {
   const authBtn              = document.getElementById('authBtn');
   const authSignOutBtn       = document.getElementById('authSignOutBtn');
   const headerMenuBtn        = document.getElementById('headerMenuBtn');
+  const sidepanelGetProBtn   = document.getElementById('sidepanelGetProBtn');
   const openSettingsBtn      = document.getElementById('openSettingsBtn');
   const settingsBackBtn      = document.getElementById('settingsBackBtn');
   const floaterEnabledSelect = document.getElementById('floaterEnabledSelect');
@@ -103,6 +105,10 @@ function setupEventListeners() {
   });
 
   // ── Header menu ──
+  sidepanelGetProBtn.addEventListener('click', () => {
+    window.open(READEASY_PRO_CHECKOUT_URL, '_blank');
+  });
+
   headerMenuBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();

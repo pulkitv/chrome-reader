@@ -286,7 +286,22 @@ export async function updateStorageInfo() {
     // Convert to MB
     const sizeMB = (totalSize / (1024 * 1024)).toFixed(1);
 
-    document.getElementById('storageInfo').textContent = `${count}/10 articles • ${sizeMB}MB`;
+    let storageText = `${count}/10 articles • ${sizeMB}MB`;
+    let isPro = false;
+    try {
+      const plan = await chrome.runtime.sendMessage({ action: 'getUserPlan' });
+      if (plan && plan.success && plan.isPro) {
+        storageText = `${count} articles • Pro • ${sizeMB}MB`;
+        isPro = true;
+      }
+    } catch (_) {
+      // Keep the free-limit label if plan lookup is unavailable.
+    }
+
+    const proBtn = document.getElementById('sidepanelGetProBtn');
+    if (proBtn) proBtn.hidden = isPro;
+
+    document.getElementById('storageInfo').textContent = storageText;
   } catch (error) {
     console.error('Error calculating storage:', error);
   }

@@ -21,12 +21,7 @@
         <!-- Auth button -->
         <div class="reader-auth-wrap">
           <button id="readerAuthBtn" class="icon-btn auth-btn signed-out" title="Sign in with Google" aria-label="Sign in with Google" aria-haspopup="true" aria-expanded="false" type="button">
-            <span id="readerAuthGuestIcon" class="auth-guest-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M20 21C20 17.6863 16.4183 15 12 15C7.58172 15 4 17.6863 4 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
-              </svg>
-            </span>
+            <span id="readerAuthGuestIcon" class="auth-guest-icon">Login</span>
             <img id="readerAuthAvatar" class="auth-avatar" alt="Profile" hidden />
           </button>
           <div id="readerAuthDropdown" class="reader-auth-dropdown" hidden>
@@ -120,13 +115,7 @@
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
             </button>
-<button id="emailEpubBtn" class="icon-btn" title="Email EPUB">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                <polyline points="22,6 12,13 2,6"/>
-              </svg>
-            </button>
-            <a id="feedbackBtn" href="https://readeasy.featurebase.app/" target="_blank" rel="noopener noreferrer" class="icon-btn text-btn icon-text-btn" title="Share feedback and ideas">
+<a id="feedbackBtn" href="https://readeasy.featurebase.app/" target="_blank" rel="noopener noreferrer" class="icon-btn text-btn icon-text-btn" title="Share feedback and ideas">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>
                 <path d="M8 10h8M8 14h5"/>
@@ -139,6 +128,10 @@
               </svg>
               <span>Buy me coffee</span>
             </a>
+            <button id="getProLink" class="icon-btn text-btn icon-text-btn pro-link" title="Get ReadEasy Pro">
+              <span>Get ReadEasy Pro</span>
+            </button>
+            <span id="proBadge" class="pro-badge" hidden>Pro</span>
           </div>
         </div>
         <div class="header-row header-row-secondary">
@@ -161,14 +154,14 @@
               <span>Upload Epub</span>
             </button>
             <input type="file" id="uploadFileInput" accept=".epub,.html,.htm" hidden />
-            <button id="ttsSendBtn" class="icon-btn text-btn icon-text-btn" title="Dashboard">
+            <button id="viewSavedArticlesLink" class="icon-btn text-btn icon-text-btn" title="View saved articles">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 3h7v7"/>
                 <path d="M10 14L21 3"/>
                 <path d="M21 14v7h-7"/>
                 <path d="M3 10V3h7"/>
               </svg>
-              <span>Dashboard</span>
+              <span>View Saved Articles <span id="savedArticlesCount" class="saved-articles-count" hidden></span></span>
             </button>
             <button id="addToListBtn" class="icon-btn text-btn icon-text-btn" title="Save article">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -359,25 +352,6 @@
       <div class="modal-footer">
         <button id="cancelDownload" class="btn btn-secondary">Cancel</button>
         <button id="confirmDownload" class="btn btn-primary">Download</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Email EPUB Modal -->
-  <div id="emailEpubModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Email EPUB File</h2>
-        <button id="closeEmailEpubModal" class="close-modal">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p>Enter the recipient's email address:</p>
-        <input type="email" id="recipientEmailInput" placeholder="recipient@example.com" class="email-input" />
-        <p class="modal-note">The EPUB file will be downloaded, and your email client will open with the recipient filled in. You'll need to manually attach the downloaded EPUB file before sending.</p>
-      </div>
-      <div class="modal-footer">
-        <button id="cancelEmailEpub" class="btn btn-secondary">Cancel</button>
-        <button id="confirmEmailEpub" class="btn btn-primary">Continue</button>
       </div>
     </div>
   </div>

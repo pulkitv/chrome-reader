@@ -99,26 +99,34 @@ body {
 }
 
 #readerAuthBtn {
-  width: 32px;
-  height: 32px;
+  /* Signed-out default: text pill */
+  width: auto;
+  height: auto;
+  padding: 6px 14px;
   border-radius: 999px;
-  padding: 0;
-  overflow: hidden;
-  border: 2px solid var(--border-color);
+  border: 1px solid var(--border-color);
+  background: none;
+  color: var(--text-color);
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 500;
+  cursor: pointer;
   flex-shrink: 0;
   position: relative;
 }
 
 #readerAuthBtn.signed-in {
+  /* Signed-in: 32×32 circular avatar holder */
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  overflow: hidden;
+  border-width: 2px;
   border-color: rgba(11, 103, 209, 0.45);
 }
 
 #readerAuthBtn .auth-guest-icon {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
 }
 
 #readerAuthBtn .auth-avatar {
@@ -204,6 +212,25 @@ body {
 
 .reader-auth-menu-item:hover {
   background: var(--border-color);
+}
+
+.pro-link {
+  border-color: rgba(11, 103, 209, 0.35);
+  color: var(--link-color);
+  font-weight: 700;
+}
+
+.pro-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(11, 103, 209, 0.14);
+  color: var(--link-color);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .header-right {

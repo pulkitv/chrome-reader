@@ -92,7 +92,9 @@
 - [ ] Repeated Save Selection from same page creates unique entries
 - [ ] Inline title edit (pencil icon) updates card title and persists
 - [ ] Remove from list works and refreshes UI
-- [ ] Reading list cap behavior (10 items) evicts oldest item
+- [ ] Free reading list cap behavior (10 items) evicts oldest item
+- [ ] Pro user can save more than 10 articles; Pro upgrade buttons hide
+- [ ] Non-Pro user sees ReadEasy Pro upgrade entry point in reader toolbar and side panel header
 
 ## Floating Launcher & Settings
 

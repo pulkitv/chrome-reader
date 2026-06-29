@@ -14,6 +14,7 @@ export const FONT_SIZES     = ['font-small', 'font-normal', 'font-large', 'font-
 export const THEMES         = ['light-theme', 'sepia-theme', 'dark-theme'];
 export const AUTH_STATE_KEY = 'authState';
 export const TTS_WEBAPP_URL = 'https://merge-epubs.vercel.app/#/reader';
+export const READEASY_PRO_CHECKOUT_URL = 'https://checkout.dodopayments.com/buy/pdt_0NhrebkSf6BNYIxwThp3A?quantity=1';
 
 // ── Mutable shared state ──────────────────────────────────────────────────────
 
@@ -25,6 +26,11 @@ export const state = {
 
   // ── Reading list ─────────────────────────────────────────────────────────
   currentArticleId: null,  // IndexedDB id of the currently displayed article once saved
+  userPlan: {
+    isPro: false,
+    articleLimit: 10,
+    articleCount: null
+  },
 
   // ── Edit mode ────────────────────────────────────────────────────────────
   isEditMode:        false,

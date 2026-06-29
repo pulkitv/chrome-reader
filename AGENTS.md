@@ -77,7 +77,7 @@ Both stores **must be kept in sync** on every add/delete/title-update.
 10. **EPUB `mimetype` entry must use `{ compression: 'STORE' }`** — required by EPUB spec.
 11. **`declarativeNetRequest` rules require extension reload** — Chrome rebuilds `_metadata/` on reload.
 12. **`#readerAuthBtn` needs `position: relative`; `.auth-guest-icon` and `.auth-avatar` need `position: absolute; inset: 0`** — `align-self: stretch` silently fails on first paint in Chrome extension pages.
-13. **Cloud sync is fire-and-forget** — `supabaseSyncArticle`, `supabaseDeleteArticle`, `supabaseTouchArticle` catch all errors internally; never gate the save/delete flow on Supabase availability.
+13. **Cloud sync is fire-and-forget** — `supabaseSyncArticle`, `supabaseDeleteArticle`, and plan lookup helpers catch all errors internally; never gate the save/delete flow on Supabase availability.
 14. **`state.currentArticleId` must be populated from `saveToReadingList` response** — `response.articleId` is set by background on save; without it, edit-mode changes cannot persist to the reading list entry.
 
 ---

@@ -61,9 +61,14 @@ import {
   initTtsVoices,
   startTtsPlayback,
   pauseTtsPlayback,
-  resumeTtsPlayback,
-  sendArticleToWebapp
+  resumeTtsPlayback
 }                                   from './reader/tts.js';
+
+import {
+  refreshSavedArticlesCount,
+  openReadEasyProCheckout,
+  openSavedArticlesWebapp
+}                                   from './reader/cloud-count.js';
 
 import {
   startFlashIt,
@@ -78,10 +83,7 @@ import {
 import {
   openDownloadModal,
   closeDownloadModal,
-  downloadArticleHTML,
-  openEmailEpubModal,
-  closeEmailEpubModal,
-  emailArticleEPUB
+  downloadArticleHTML
 }                                   from './reader/epub.js';
 
 import { initUpload }               from './reader/upload.js';
@@ -109,7 +111,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateProgressBar();
 
   // Fire-and-forget: silently save article; must not block or throw in reader
-  autoSaveToReadingList();
+  autoSaveToReadingList().finally(() => {
+    refreshSavedArticlesCount();
+  });
 });
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -166,18 +170,6 @@ function setupEventListeners() {
     if (e.key === 'Enter') downloadArticleHTML();
   });
 
-  // ── Email EPUB modal ──
-  document.getElementById('emailEpubBtn').addEventListener('click', openEmailEpubModal);
-  document.getElementById('closeEmailEpubModal').addEventListener('click', closeEmailEpubModal);
-  document.getElementById('cancelEmailEpub').addEventListener('click', closeEmailEpubModal);
-  document.getElementById('confirmEmailEpub').addEventListener('click', emailArticleEPUB);
-  document.getElementById('emailEpubModal').addEventListener('click', e => {
-    if (e.target.id === 'emailEpubModal') closeEmailEpubModal();
-  });
-  document.getElementById('recipientEmailInput').addEventListener('keypress', e => {
-    if (e.key === 'Enter') emailArticleEPUB();
-  });
-
   // ── TTS ──
   document.getElementById('ttsToggleBtn').addEventListener('click', () => {
     if (!('speechSynthesis' in window)) return;
@@ -185,7 +177,8 @@ function setupEventListeners() {
     else if (speechSynthesis.paused) resumeTtsPlayback();
     else                             pauseTtsPlayback();
   });
-  document.getElementById('ttsSendBtn').addEventListener('click', sendArticleToWebapp);
+  document.getElementById('viewSavedArticlesLink').addEventListener('click', openSavedArticlesWebapp);
+  document.getElementById('getProLink').addEventListener('click', openReadEasyProCheckout);
   initTtsVoices();
 
   // ── Flash It ──

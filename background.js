@@ -11,6 +11,7 @@ const AUTH_STATE_KEY = 'authState';
 const AUTH_PROVIDER_GOOGLE = 'google';
 const MIN_ACCEPTED_CONTENT_CHARS = 180;
 const EXTRACTION_RETRY_DELAYS_MS = [0, 350, 900];
+const FREE_ARTICLE_LIMIT = 10;
 
 const SUPABASE_URL = 'https://pcyjafpopnjtjqaelycy.supabase.co';
 
@@ -206,17 +207,51 @@ async function supabaseSyncArticle(localId, article, opts = {}) {
   }
 }
 
-async function supabaseTouchArticle(url) {
+async function supabaseCountArticles() {
   try {
     const googleToken = await getInMemoryAuthToken();
-    if (!googleToken) return;
-    await fetch(`${SUPABASE_URL}/functions/v1/sync-article`, {
+    if (!googleToken) return null;
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/get-user-plan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ googleAccessToken: googleToken, url, touchOnly: true })
+      body: JSON.stringify({ googleAccessToken: googleToken })
     });
+    if (!resp.ok) return null;
+    const { articleCount: count } = await resp.json();
+    return typeof count === 'number' ? count : null;
   } catch (err) {
-    console.warn('[ReadEasy] Cloud touch failed (non-fatal):', err.message);
+    console.warn('[ReadEasy] Cloud count failed (non-fatal):', err.message);
+    return null;
+  }
+}
+
+async function supabaseGetUserPlan() {
+  try {
+    const googleToken = await getInMemoryAuthToken();
+    if (!googleToken) {
+      return { isSignedIn: false, isPro: false, articleLimit: FREE_ARTICLE_LIMIT, articleCount: null, planLookupFailed: false };
+    }
+
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/get-user-plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ googleAccessToken: googleToken })
+    });
+    if (!resp.ok) {
+      throw new Error(`get-user-plan: ${resp.status}`);
+    }
+
+    const plan = await resp.json();
+    return {
+      isSignedIn: true,
+      isPro: plan && plan.isPro === true,
+      articleLimit: plan && plan.isPro === true ? null : FREE_ARTICLE_LIMIT,
+      articleCount: typeof plan?.articleCount === 'number' ? plan.articleCount : null,
+      planLookupFailed: false
+    };
+  } catch (err) {
+    console.warn('[ReadEasy] User plan lookup failed (non-fatal):', err.message);
+    return { isSignedIn: false, isPro: false, articleLimit: FREE_ARTICLE_LIMIT, articleCount: null, planLookupFailed: true };
   }
 }
 
@@ -386,6 +421,23 @@ async function getArticleById(id) {
   });
 }
 
+async function evictOldestLocalArticlesUntilBelow(limit) {
+  const evictedIds = [];
+  let count = await getArticleCount();
+
+  while (count >= limit) {
+    const oldest = await getOldestArticle();
+    if (!oldest) break;
+    await deleteArticle(oldest.id);
+    supabaseDeleteArticle(oldest.id, oldest.url);
+    evictedIds.push(oldest.id);
+    count--;
+    console.log('Deleted oldest article to make room:', oldest.title);
+  }
+
+  return evictedIds;
+}
+
 function htmlToText(html) {
   return (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -444,9 +496,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     chrome.sidePanel.open({ windowId: tab.windowId });
   }
   if (info.menuItemId === 'openReaderView') {
-    if (_panelDisplayState !== 'user-closed') {
-      chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
-    }
     try {
       await openReaderViewForTab(tab);
     } catch (error) {
@@ -578,7 +627,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const storedText = htmlToText(stored.htmlContent || '');
             const newText    = htmlToText(message.article.htmlContent || '');
             if (storedText === newText) {
-              supabaseTouchArticle(message.article.url);
+              // Use a full autoSaveOnly sync (not bare touchOnly) so the server
+              // can heal a missing cloud row by falling through to first-capture.
+              supabaseSyncArticle(mostRecent.id, stored, { autoSaveOnly: true });
               sendResponse({ success: true, duplicate: true, articleId: mostRecent.id });
               return;
             }
@@ -586,18 +637,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
-        // Check if at capacity (10 articles)
-        const count = await getArticleCount();
-        
-        if (count >= 10) {
-          // Delete oldest article to make room
-          const oldest = await getOldestArticle();
-          if (oldest) {
-            await deleteArticle(oldest.id);
-            supabaseDeleteArticle(oldest.id, oldest.url);
-            console.log('Deleted oldest article to make room:', oldest.title);
-          }
-        }
+        const plan = await supabaseGetUserPlan();
+        const evictedIds = plan.isPro
+          ? []
+          : plan.planLookupFailed
+            ? []
+            : await evictOldestLocalArticlesUntilBelow(FREE_ARTICLE_LIMIT);
 
         // Add article to IndexedDB
         const articleId = await addArticle(message.article);
@@ -610,11 +655,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Update metadata in chrome.storage.local
         const { readingListMeta = [] } = await chrome.storage.local.get('readingListMeta');
         
-        // Remove oldest if we were at capacity
-        let updatedMeta = readingListMeta;
-        if (updatedMeta.length >= 10) {
-          updatedMeta = updatedMeta.slice(1); // Remove first (oldest)
-        }
+        let updatedMeta = evictedIds.length
+          ? readingListMeta.filter(item => !evictedIds.includes(item.id))
+          : readingListMeta;
         
         // Add new article metadata
         updatedMeta.push({
@@ -679,6 +722,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         sendResponse({ success: true });
       }
+      else if (message.action === 'getCloudArticleCount') {
+        const count = await supabaseCountArticles();
+        sendResponse({ count });
+      }
+      else if (message.action === 'getUserPlan') {
+        const plan = await supabaseGetUserPlan();
+        sendResponse({ success: true, ...plan });
+      }
       else if (message.action === 'openSidePanel') {
         // Open the panel first — sidePanel.open() requires the user gesture to still be live.
         // Any await before this call would expire the gesture.
@@ -694,11 +745,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       else if (message.action === 'openReaderView') {
         if (!sender.tab || !sender.tab.id) {
           throw new Error('No sender tab for reader view');
-        }
-
-        // Open side panel first (no await before this — user gesture must stay live)
-        if (_panelDisplayState !== 'user-closed' && sender.tab.windowId) {
-          chrome.sidePanel.open({ windowId: sender.tab.windowId }).catch(() => {});
         }
 
         // Use chrome.tabs.get for a fully-populated Tab object — sender.tab from a
@@ -848,10 +894,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 // Handle extension icon click
 chrome.action.onClicked.addListener(async (tab) => {
-  // Open side panel first — no await before this call so the user gesture stays fresh.
-  if (_panelDisplayState !== 'user-closed') {
-    chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
-  }
   try {
     await openReaderViewForTab(tab);
   } catch (error) {

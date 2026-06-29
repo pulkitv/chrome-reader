@@ -11,6 +11,8 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const FREE_ARTICLE_LIMIT = 10
+
 async function verifyGoogleToken(token: string) {
   const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${token}` }
@@ -18,6 +20,73 @@ async function verifyGoogleToken(token: string) {
   if (!resp.ok) return null
   const { id, email } = await resp.json()
   return { googleUid: id as string, googleEmail: email as string }
+}
+
+async function isProUser(googleEmail: string) {
+  const email = String(googleEmail || '').toLowerCase()
+  if (!email) return false
+
+  const { data, error } = await supabase
+    .from('user_entitlements')
+    .select('is_pro')
+    .eq('google_email_lower', email)
+    .maybeSingle()
+
+  if (error) throw new Error(`Entitlement lookup failed: ${error.message}`)
+  return data?.is_pro === true
+}
+
+async function removeArticleFilesAndRow(googleUid: string, article: { id: string, content_path?: string | null }) {
+  const dirPath = `articles/${googleUid}/${article.id}`
+  const filesToDelete: string[] = []
+
+  const { data: files } = await supabase.storage
+    .from('article-content')
+    .list(dirPath)
+
+  if (files) {
+    for (const file of files) {
+      filesToDelete.push(`${dirPath}/${file.name}`)
+    }
+  }
+
+  if (article.content_path && !article.content_path.startsWith('articles/')) {
+    filesToDelete.push(article.content_path)
+  }
+
+  await Promise.allSettled([
+    supabase.from('articles').delete().eq('id', article.id),
+    filesToDelete.length > 0
+      ? supabase.storage.from('article-content').remove(filesToDelete)
+      : Promise.resolve(),
+  ])
+}
+
+async function ensureFreeArticleSlot(googleUid: string, googleEmail: string) {
+  if (await isProUser(googleEmail)) return
+
+  let { count, error } = await supabase
+    .from('articles')
+    .select('*', { count: 'exact', head: true })
+    .eq('google_uid', googleUid)
+
+  if (error) throw new Error(`Article count failed: ${error.message}`)
+
+  while ((count ?? 0) >= FREE_ARTICLE_LIMIT) {
+    const { data: oldest, error: oldestErr } = await supabase
+      .from('articles')
+      .select('id, content_path')
+      .eq('google_uid', googleUid)
+      .order('added_date', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (oldestErr) throw new Error(`Oldest article lookup failed: ${oldestErr.message}`)
+    if (!oldest) return
+
+    await removeArticleFilesAndRow(googleUid, oldest)
+    count = (count ?? 1) - 1
+  }
 }
 
 Deno.serve(async (req) => {
@@ -91,6 +160,10 @@ Deno.serve(async (req) => {
       }), {
         headers: { ...CORS, 'Content-Type': 'application/json' }
       })
+    }
+
+    if (!existing) {
+      await ensureFreeArticleSlot(googleUid, googleEmail)
     }
 
     // Legacy migration: if the existing row predates versioning, its
